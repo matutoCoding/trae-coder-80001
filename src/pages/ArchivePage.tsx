@@ -63,6 +63,11 @@ const ArchivePage = () => {
   const handleImport = async () => {
     const result = await importArchive()
     if (result) {
+      const exists = archives.some(a => a.id === result.id)
+      if (exists) {
+        message.warning('该档案已存在，无需重复导入')
+        return
+      }
       addArchive(result)
       message.success('档案导入成功')
     }

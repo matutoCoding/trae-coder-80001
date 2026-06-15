@@ -552,6 +552,17 @@ export function reviewArchive(archive: {
   archive.ashLayers.forEach((layer, index) => {
     const record = ashRecords.find(r => r.layerId === layer.id)
     
+    if (layer.isDry && !layer.appliedAt) {
+      issues.push({
+        id: `ash-dry-without-apply-${layer.id}`,
+        type: 'ash',
+        severity: 'error',
+        message: `${layer.name}未施工却标记为已完成`,
+        layerId: layer.id,
+        layerName: layer.name
+      })
+    }
+    
     if (layer.appliedAt && !record) {
       issues.push({
         id: `ash-missing-record-${layer.id}`,
@@ -591,6 +602,17 @@ export function reviewArchive(archive: {
 
   archive.mabuLayers.forEach((layer) => {
     const record = mabuRecords.find(r => r.layerId === layer.id)
+    
+    if (layer.isDry && !layer.appliedAt) {
+      issues.push({
+        id: `mabu-dry-without-apply-${layer.id}`,
+        type: 'mabu',
+        severity: 'error',
+        message: `${layer.name}未施工却标记为已完成`,
+        layerId: layer.id,
+        layerName: layer.name
+      })
+    }
     
     if (layer.appliedAt && !record) {
       issues.push({

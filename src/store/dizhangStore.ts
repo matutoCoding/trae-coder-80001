@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import dayjs from 'dayjs'
 import type { 
   WoodenComponent, DizhangProcess, DizhangArchive, DizhangParadigm,
   AshLayer, MabuLayer, RiskWarning, ProcessRecord
@@ -37,6 +38,7 @@ interface DizhangState {
   markMabuLayerDry: (processId: string, layerId: string) => void
   addProcessWarning: (processId: string, warning: RiskWarning) => void
   completeProcess: (processId: string, inspector?: string, notes?: string) => DizhangArchive | null
+  addArchive: (archive: DizhangArchive) => void
   addParadigm: (paradigm: DizhangParadigm) => void
   updateParadigm: (id: string, paradigm: Partial<DizhangParadigm>) => void
   deleteParadigm: (id: string) => void
@@ -440,6 +442,12 @@ export const useDizhangStore = create<DizhangState>((set, get) => ({
     return archive
   },
 
+  addArchive: (archive) => {
+    set((state) => ({
+      archives: [...state.archives, archive]
+    }))
+  },
+
   addParadigm: (paradigm) =>
     set((state) => ({
       paradigms: [...state.paradigms, paradigm]
@@ -597,5 +605,42 @@ export const usePersistence = () => {
     return false
   }
 
-  return { saveAll, loadAll, exportData, importData }
+  const exportArchive = async (archiveId: string) => {
+    const archive = store.archives.find(a => a.id === archiveId)
+    if (!archive) return false
+
+    const exportData = {
+      type: 'dizhang-archive',
+      version: '1.0',
+      exportTime: new Date().toISOString(),
+      archive
+    }
+    const fileName = `验收报告-${archive.componentName}-${dayjs().format('YYYYMMDD-HHmm')}.json`
+
+    if (window.electronAPI) {
+      const result = await window.electronAPI.exportFile(JSON.stringify(exportData, null, 2), fileName)
+      return result.success
+    }
+    return false
+  }
+
+  const importArchive = async (): Promise<DizhangArchive | null> => {
+    if (window.electronAPI) {
+      const result = await window.electronAPI.importFile()
+      if (result.success && result.data) {
+        try {
+          const data = JSON.parse(result.data)
+          const archive = data.archive || (data.type === 'dizhang-archive' ? data.archive : null)
+          if (archive && archive.id) {
+            return archive
+          }
+        } catch {
+          return null
+        }
+      }
+    }
+    return null
+  }
+
+  return { saveAll, loadAll, exportData, importData, exportArchive, importArchive }
 }

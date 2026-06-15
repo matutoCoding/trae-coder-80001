@@ -144,12 +144,12 @@ const PlasteringPage = () => {
     return simulateCuringEffect(temperature, humidity)
   }, [temperature, humidity])
 
-  const processSequence = useMemo(() => {
+  type ProcessStep = 
+    | { type: 'ash'; layer: AshLayer; index: number }
+    | { type: 'mabu'; layer: MabuLayer; index: number }
+
+  const processSequence = useMemo((): ProcessStep[] => {
     if (!currentProcess) return []
-    
-    type ProcessStep = 
-      | { type: 'ash'; layer: AshLayer; index: number }
-      | { type: 'mabu'; layer: MabuLayer; index: number }
     
     const sequence: ProcessStep[] = []
     const ashLayers = currentProcess.layers
@@ -327,6 +327,33 @@ const PlasteringPage = () => {
     return { status: 'done', text: '已完成', color: 'success', canStart: false }
   }
 
+  const isPrevStepDry = (stepIndex: number): boolean => {
+    if (stepIndex <= 0 || !currentProcess) return true
+    const prevStep = processSequence[stepIndex - 1]
+    if (!prevStep) return true
+    if (prevStep.type === 'ash') {
+      return prevStep.layer.isDry
+    } else {
+      return prevStep.layer.isDry
+    }
+  }
+
+  const getStepStatus = (step: ProcessStep, stepIndex: number) => {
+    const layer = step.layer
+    const prevDry = isPrevStepDry(stepIndex)
+    
+    if (!layer.appliedAt) {
+      if (prevDry) {
+        return { status: 'pending' as const, text: '待施工', color: 'default', canStart: true }
+      }
+      return { status: 'blocked' as const, text: '等待前层干燥', color: 'default', canStart: false }
+    }
+    if (!layer.isDry) {
+      return { status: 'drying' as const, text: '干燥中', color: 'processing', canStart: false }
+    }
+    return { status: 'done' as const, text: '已完成', color: 'success', canStart: false }
+  }
+
   const handleCompleteProcess = () => {
     if (!currentProcess) return
 
@@ -421,9 +448,15 @@ const PlasteringPage = () => {
   }
 
   const availableProcesses = processes.filter(p => p.status !== 'completed')
-  const progress = currentProcess 
-    ? Math.round((currentProcess.layers.filter(l => l.isDry).length / currentProcess.layers.length) * 100)
-    : 0
+  const progress = useMemo(() => {
+    if (!currentProcess) return 0
+    const total = currentProcess.layers.length + currentProcess.mabuLayers.length
+    const done = [
+      ...currentProcess.layers.filter(l => l.isDry),
+      ...currentProcess.mabuLayers.filter(l => l.isDry)
+    ].length
+    return total > 0 ? Math.round((done / total) * 100) : 0
+  }, [currentProcess])
 
   return (
     <div>
@@ -659,163 +692,146 @@ const PlasteringPage = () => {
                   mode="left"
                   style={{ marginTop: 16 }}
                 >
-                  {currentProcess.layers.map((layer, index) => {
-                    const status = getLayerStatus(layer, index)
-                    const prevLayer = index > 0 ? currentProcess.layers[index - 1] : null
-                    const { adjustedDryTime } = calculateDryTime(layer.dryTime, temperature, humidity)
-                    
-                    const canStart = status.canStart
-                    const isDrying = layer.appliedAt && !layer.isDry
-                    const timeSinceApplied = layer.appliedAt 
-                      ? (Date.now() - new Date(layer.appliedAt).getTime()) / (1000 * 60 * 60)
-                      : 0
-                    const dryProgress = isDrying 
-                      ? Math.min(100, Math.round((timeSinceApplied / (layer.actualDryTime || adjustedDryTime)) * 100))
-                      : 0
+                  {processSequence.map((step, stepIndex) => {
+                    const stepStatus = getStepStatus(step, stepIndex)
+                    if (step.type === 'ash') {
+                      const layer = step.layer
+                      const status = stepStatus
+                      const { adjustedDryTime } = calculateDryTime(layer.dryTime, temperature, humidity)
+                      
+                      const canStart = status.canStart
+                      const isDrying = layer.appliedAt && !layer.isDry
+                      const timeSinceApplied = layer.appliedAt 
+                        ? (Date.now() - new Date(layer.appliedAt).getTime()) / (1000 * 60 * 60)
+                        : 0
+                      const dryProgress = isDrying 
+                        ? Math.min(100, Math.round((timeSinceApplied / (layer.actualDryTime || adjustedDryTime)) * 100))
+                        : 0
 
-                    return (
-                      <Timeline.Item
-                        key={layer.id}
-                        color={
-                          status.status === 'done' ? 'green' :
-                          status.status === 'drying' ? 'blue' :
-                          status.status === 'blocked' ? 'gray' : '#8B4513'
-                        }
-                        dot={
-                          status.status === 'done' ? <CheckCircleOutlined /> :
-                          status.status === 'drying' ? <ClockCircleOutlined spin /> :
-                          <Badge status={status.status === 'blocked' ? 'default' : 'processing'} />
-                        }
-                      >
-                        <Card
-                          size="small"
-                          className="layer-card"
-                          style={{ 
-                            marginBottom: 8,
-                            borderColor: layer.hasDeviation ? '#ff4d4f' : undefined
-                          }}
-                          title={
-                            <Space>
-                              <div 
-                                className="layer-visual" 
-                                style={{ 
-                                  width: 40, 
-                                  height: 20, 
-                                  backgroundColor: LAYER_COLORS[index % LAYER_COLORS.length] 
-                                }}
-                              />
-                              <span style={layer.hasDeviation ? { color: '#ff4d4f' } : {}}>
-                                {layer.name}
-                              </span>
-                              {layer.hasDeviation && (
-                                <Tooltip title="配比存在偏差，请注意">
-                                  <WarningOutlined style={{ color: '#ff4d4f' }} />
-                                </Tooltip>
-                              )}
-                              <Tag color={status.color}>{status.text}</Tag>
-                            </Space>
+                      return (
+                        <Timeline.Item
+                          key={`ash-${layer.id}`}
+                          color={
+                            status.status === 'done' ? 'green' :
+                            status.status === 'drying' ? 'blue' :
+                            status.status === 'blocked' ? 'gray' : '#8B4513'
                           }
-                          extra={
-                            <Space>
-                              <span style={{ color: '#8b7355', fontSize: 12 }}>
-                                厚度: {layer.thickness}mm | 
-                                标准干燥: {layer.dryTime}h | 
-                                预计干燥: {adjustedDryTime.toFixed(1)}h
-                              </span>
-                            </Space>
+                          dot={
+                            status.status === 'done' ? <CheckCircleOutlined /> :
+                            status.status === 'drying' ? <ClockCircleOutlined spin /> :
+                            <Badge status={status.status === 'blocked' ? 'default' : 'processing'} />
                           }
                         >
-                          <Row gutter={16} align="middle">
-                            <Col span={16}>
-                              <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                                {layer.appliedAt && (
-                                  <Descriptions size="small" column={3}>
-                                    <Descriptions.Item label="施工时间">
-                                      {dayjs(layer.appliedAt).format('YYYY-MM-DD HH:mm')}
-                                    </Descriptions.Item>
-                                    <Descriptions.Item label="实际干燥时间">
-                                      {(layer.actualDryTime || adjustedDryTime).toFixed(1)}h
-                                    </Descriptions.Item>
-                                    {layer.notes && (
-                                      <Descriptions.Item label="备注">
-                                        {layer.notes}
-                                      </Descriptions.Item>
-                                    )}
-                                  </Descriptions>
+                          <Card
+                            size="small"
+                            className="layer-card"
+                            style={{ 
+                              marginBottom: 8,
+                              borderColor: layer.hasDeviation ? '#ff4d4f' : undefined
+                            }}
+                            title={
+                              <Space>
+                                <div 
+                                  className="layer-visual" 
+                                  style={{ 
+                                    width: 40, 
+                                    height: 20, 
+                                    backgroundColor: LAYER_COLORS[step.index % LAYER_COLORS.length] 
+                                  }}
+                                />
+                                <span style={layer.hasDeviation ? { color: '#ff4d4f' } : {}}>
+                                  {layer.name}
+                                </span>
+                                {layer.hasDeviation && (
+                                  <Tooltip title="配比存在偏差，请注意">
+                                    <WarningOutlined style={{ color: '#ff4d4f' }} />
+                                  </Tooltip>
                                 )}
-                                {isDrying && (
-                                  <Progress
-                                    percent={dryProgress}
-                                    size="small"
-                                    strokeColor={dryProgress >= 100 ? '#52c41a' : '#1890ff'}
-                                    format={(p) => `干燥进度 ${p}%`}
-                                  />
-                                )}
+                                <Tag color={status.color}>{status.text}</Tag>
                               </Space>
-                            </Col>
-                            <Col span={8} style={{ textAlign: 'right' }}>
-                              {canStart && (
-                                <Button
-                                  type="primary"
-                                  icon={<PlayCircleOutlined />}
-                                  onClick={() => handleRecordLayer(layer)}
-                                >
-                                  开始施工
-                                </Button>
-                              )}
-                              {isDrying && dryProgress >= 100 && (
-                                <Button
-                                  type="primary"
-                                  icon={<CheckCircleOutlined />}
-                                  onClick={() => handleMarkDry(layer)}
-                                >
-                                  确认干燥
-                                </Button>
-                              )}
-                              {isDrying && dryProgress < 100 && (
-                                <Tag color="processing">
-                                  还需 {(adjustedDryTime - timeSinceApplied).toFixed(1)} 小时
-                                </Tag>
-                              )}
-                              {status.status === 'blocked' && (
-                                <Tooltip title={prevLayer ? `等待「${prevLayer.name}」干燥` : '等待施工条件'}>
-                                  <Button disabled>
-                                    等待中
+                            }
+                            extra={
+                              <Space>
+                                <span style={{ color: '#8b7355', fontSize: 12 }}>
+                                  厚度: {layer.thickness}mm | 
+                                  标准干燥: {layer.dryTime}h | 
+                                  预计干燥: {adjustedDryTime.toFixed(1)}h
+                                </span>
+                              </Space>
+                            }
+                          >
+                            <Row gutter={16} align="middle">
+                              <Col span={16}>
+                                <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                                  {layer.appliedAt && (
+                                    <Descriptions size="small" column={3}>
+                                      <Descriptions.Item label="施工时间">
+                                        {dayjs(layer.appliedAt).format('YYYY-MM-DD HH:mm')}
+                                      </Descriptions.Item>
+                                      <Descriptions.Item label="实际干燥时间">
+                                        {(layer.actualDryTime || adjustedDryTime).toFixed(1)}h
+                                      </Descriptions.Item>
+                                      {layer.notes && (
+                                        <Descriptions.Item label="备注">
+                                          {layer.notes}
+                                        </Descriptions.Item>
+                                      )}
+                                    </Descriptions>
+                                  )}
+                                  {isDrying && (
+                                    <Progress
+                                      percent={dryProgress}
+                                      size="small"
+                                      strokeColor={dryProgress >= 100 ? '#52c41a' : '#1890ff'}
+                                      format={(p) => `干燥进度 ${p}%`}
+                                    />
+                                  )}
+                                </Space>
+                              </Col>
+                              <Col span={8} style={{ textAlign: 'right' }}>
+                                {canStart && (
+                                  <Button
+                                    type="primary"
+                                    icon={<PlayCircleOutlined />}
+                                    onClick={() => handleRecordLayer(layer)}
+                                  >
+                                    开始施工
                                   </Button>
-                                </Tooltip>
-                              )}
-                              {status.status === 'done' && (
-                                <Tag color="success">
-                                  完成于 {dayjs(layer.appliedAt!).format('MM-DD HH:mm')}
-                                </Tag>
-                              )}
-                            </Col>
-                          </Row>
-                        </Card>
-                      </Timeline.Item>
-                    )
-                  })}
-                </Timeline>
-              </Card>
-            </Col>
-          </Row>
-
-          {currentProcess.mabuLayers.length > 0 && (
-            <Row gutter={16} style={{ marginBottom: 16 }}>
-              <Col span={24}>
-                <Card 
-                  title={
-                    <Space>
-                      <span>🧵</span>
-                      麻布/麻丝层施工记录
-                      <Tag color="blue">{currentProcess.mabuLayers.length} 道</Tag>
-                    </Space>
-                  }
-                  className="layer-card"
-                >
-                  <Row gutter={16}>
-                    {currentProcess.mabuLayers.map((layer, index) => {
-                      const status = getMabuLayerStatus(layer, index)
+                                )}
+                                {isDrying && dryProgress >= 100 && (
+                                  <Button
+                                    type="primary"
+                                    icon={<CheckCircleOutlined />}
+                                    onClick={() => handleMarkDry(layer)}
+                                  >
+                                    确认干燥
+                                  </Button>
+                                )}
+                                {isDrying && dryProgress < 100 && (
+                                  <Tag color="processing">
+                                    还需 {(adjustedDryTime - timeSinceApplied).toFixed(1)} 小时
+                                  </Tag>
+                                )}
+                                {status.status === 'blocked' && (
+                                  <Tooltip title="等待前一层干燥">
+                                    <Button disabled>
+                                      等待中
+                                    </Button>
+                                  </Tooltip>
+                                )}
+                                {status.status === 'done' && (
+                                  <Tag color="success">
+                                    完成于 {dayjs(layer.appliedAt!).format('MM-DD HH:mm')}
+                                  </Tag>
+                                )}
+                              </Col>
+                            </Row>
+                          </Card>
+                        </Timeline.Item>
+                      )
+                    } else {
+                      const layer = step.layer
+                      const status = stepStatus
                       const { adjustedDryTime } = calculateDryTime(layer.dryTime, temperature, humidity)
                       const timeSinceApplied = layer.appliedAt 
                         ? (Date.now() - new Date(layer.appliedAt).getTime()) / (1000 * 60 * 60)
@@ -827,27 +843,32 @@ const PlasteringPage = () => {
                       const canStart = status.canStart
 
                       return (
-                        <Col span={12} key={layer.id}>
+                        <Timeline.Item
+                          key={`mabu-${layer.id}`}
+                          color={
+                            status.status === 'done' ? 'green' :
+                            status.status === 'drying' ? 'gold' :
+                            status.status === 'blocked' ? 'gray' : '#d4a574'
+                          }
+                          dot={
+                            status.status === 'done' ? <CheckCircleOutlined /> :
+                            status.status === 'drying' ? <ClockCircleOutlined spin /> :
+                            <Badge status={status.status === 'blocked' ? 'default' : 'processing'} />
+                          }
+                        >
                           <Card
                             size="small"
-                            type={!layer.appliedAt ? 'inner' : undefined}
+                            className="layer-card"
                             style={{ 
+                              marginBottom: 8,
                               borderColor: layer.type === 'ma' ? '#d4a574' : '#c4956a'
                             }}
                             title={
                               <Space>
-                                <div 
-                                  className="layer-visual" 
-                                  style={{ 
-                                    width: 40, 
-                                    height: 20, 
-                                    backgroundColor: layer.type === 'ma' ? '#d4a574' : '#c4956a' 
-                                  }}
-                                />
                                 <Tag color={layer.type === 'ma' ? 'gold' : 'orange'}>
-                                  {layer.type === 'ma' ? '麻丝' : '麻布'}
+                                  {layer.type === 'ma' ? '麻丝层' : '麻布层'}
                                 </Tag>
-                                {layer.name}
+                                <span>{layer.name}</span>
                                 <Tag color={status.color}>{status.text}</Tag>
                               </Space>
                             }
@@ -934,14 +955,15 @@ const PlasteringPage = () => {
                               )}
                             </div>
                           </Card>
-                        </Col>
+                        </Timeline.Item>
                       )
-                    })}
-                  </Row>
-                </Card>
-              </Col>
-            </Row>
-          )}
+                    }
+                  })}
+                </Timeline>
+              </Card>
+            </Col>
+          </Row>
+
         </>
       )}
 
