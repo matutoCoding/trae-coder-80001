@@ -1,0 +1,154 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Microsoft YaHei', 'SimSun', sans-serif;
+  background-color: #f5f0e8;
+  color: #3d2817;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f0e6d6;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c4a574;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a67c52;
+}
+
+.deviation-high {
+  color: #ff4d4f !important;
+  font-weight: bold;
+}
+
+.deviation-medium {
+  color: #faad14 !important;
+}
+
+.deviation-low {
+  color: #52c41a !important;
+}
+
+.layer-card {
+  transition: all 0.3s ease;
+}
+
+.layer-card:hover {
+  box-shadow: 0 4px 12px rgba(139, 69, 19, 0.15);
+}
+
+.warning-badge {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.ant-layout-header {
+  padding: 0 24px !important;
+}
+
+.ant-card-head-title {
+  font-weight: 600;
+  color: #5c3d2e;
+}
+
+.ant-table-thead > tr > th {
+  font-weight: 600;
+  color: #5c3d2e;
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #5c3d2e;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.page-subtitle {
+  font-size: 14px;
+  color: #8b7355;
+  margin-top: 4px;
+}
+
+.stat-card {
+  text-align: center;
+  padding: 16px;
+}
+
+.stat-card .stat-value {
+  font-size: 28px;
+  font-weight: bold;
+  color: #8B4513;
+}
+
+.stat-card .stat-label {
+  font-size: 13px;
+  color: #8b7355;
+  margin-top: 4px;
+}
+
+.chart-container {
+  width: 100%;
+  height: 300px;
+}
+
+.timeline-item .ant-timeline-item-content {
+  padding-bottom: 16px;
+}
+
+.layer-visual {
+  position: relative;
+  width: 100%;
+  height: 40px;
+  margin: 4px 0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.layer-visual-text {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: #fff;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+}
+
+.layer-visual-thickness {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: #fff;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+}
