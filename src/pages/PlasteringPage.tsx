@@ -144,6 +144,38 @@ const PlasteringPage = () => {
     return simulateCuringEffect(temperature, humidity)
   }, [temperature, humidity])
 
+  const processSequence = useMemo(() => {
+    if (!currentProcess) return []
+    
+    type ProcessStep = 
+      | { type: 'ash'; layer: AshLayer; index: number }
+      | { type: 'mabu'; layer: MabuLayer; index: number }
+    
+    const sequence: ProcessStep[] = []
+    const ashLayers = currentProcess.layers
+    const mabuLayers = currentProcess.mabuLayers
+    
+    let mabuIndex = 0
+    let passedTonghui = false
+    
+    ashLayers.forEach((layer, ashIdx) => {
+      sequence.push({ type: 'ash', layer, index: ashIdx })
+      
+      if (layer.type === 'tonghui') {
+        passedTonghui = true
+      }
+      
+      if (passedTonghui && mabuIndex < mabuLayers.length && 
+          ashIdx < ashLayers.length - 1 && 
+          ashLayers[ashIdx + 1].type !== 'xihui') {
+        sequence.push({ type: 'mabu', layer: mabuLayers[mabuIndex], index: mabuIndex })
+        mabuIndex++
+      }
+    })
+    
+    return sequence
+  }, [currentProcess])
+
   const dryingChartOption = useMemo(() => {
     if (!currentProcess) return {}
 

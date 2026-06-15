@@ -527,3 +527,138 @@ export function createMabuProcessRecord(
     mabuType: layer.type
   }
 }
+
+export type ReviewIssue = {
+  id: string
+  type: 'ash' | 'mabu' | 'material' | 'general'
+  severity: 'error' | 'warning' | 'info'
+  message: string
+  layerId?: string
+  layerName?: string
+}
+
+export function reviewArchive(archive: {
+  records: ProcessRecord[]
+  ashLayers: AshLayer[]
+  mabuLayers: MabuLayer[]
+  materialList: MaterialList
+  component: { surfaceCondition?: SurfaceCondition }
+}): ReviewIssue[] {
+  const issues: ReviewIssue[] = []
+
+  const ashRecords = archive.records.filter(r => r.layerType === 'ash')
+  const mabuRecords = archive.records.filter(r => r.layerType === 'mabu')
+
+  archive.ashLayers.forEach((layer, index) => {
+    const record = ashRecords.find(r => r.layerId === layer.id)
+    
+    if (layer.appliedAt && !record) {
+      issues.push({
+        id: `ash-missing-record-${layer.id}`,
+        type: 'ash',
+        severity: 'error',
+        message: `${layer.name}已施工但缺少施工记录`,
+        layerId: layer.id,
+        layerName: layer.name
+      })
+    }
+
+    if (record && !record.operator) {
+      issues.push({
+        id: `ash-missing-operator-${layer.id}`,
+        type: 'ash',
+        severity: 'warning',
+        message: `${layer.name}缺少施工人员记录`,
+        layerId: layer.id,
+        layerName: layer.name
+      })
+    }
+
+    if (index > 0) {
+      const prevLayer = archive.ashLayers[index - 1]
+      if (layer.appliedAt && prevLayer.appliedAt && !prevLayer.isDry) {
+        issues.push({
+          id: `ash-dry-order-${layer.id}`,
+          type: 'ash',
+          severity: 'warning',
+          message: `${prevLayer.name}未干燥即进行${layer.name}施工`,
+          layerId: layer.id,
+          layerName: layer.name
+        })
+      }
+    }
+  })
+
+  archive.mabuLayers.forEach((layer) => {
+    const record = mabuRecords.find(r => r.layerId === layer.id)
+    
+    if (layer.appliedAt && !record) {
+      issues.push({
+        id: `mabu-missing-record-${layer.id}`,
+        type: 'mabu',
+        severity: 'error',
+        message: `${layer.name}已施工但缺少施工记录`,
+        layerId: layer.id,
+        layerName: layer.name
+      })
+    }
+
+    if (record && !record.operator) {
+      issues.push({
+        id: `mabu-missing-operator-${layer.id}`,
+        type: 'mabu',
+        severity: 'warning',
+        message: `${layer.name}缺少施工人员记录`,
+        layerId: layer.id,
+        layerName: layer.name
+      })
+    }
+
+    if (record && record.mabuUsage !== undefined && Math.abs(record.mabuUsage - layer.usage) > 0.01) {
+      issues.push({
+        id: `mabu-usage-mismatch-${layer.id}`,
+        type: 'mabu',
+        severity: 'warning',
+        message: `${layer.name}记录用量(${record.mabuUsage.toFixed(2)})与汇总用量(${layer.usage.toFixed(2)})不一致`,
+        layerId: layer.id,
+        layerName: layer.name
+      })
+    }
+  })
+
+  const totalMaFromLayers = archive.mabuLayers
+    .filter(l => l.type === 'ma')
+    .reduce((sum, l) => sum + l.usage, 0)
+  const totalBuFromLayers = archive.mabuLayers
+    .filter(l => l.type === 'bu')
+    .reduce((sum, l) => sum + l.usage, 0)
+
+  if (Math.abs(totalMaFromLayers - archive.materialList.ma) > 0.01) {
+    issues.push({
+      id: 'material-ma-mismatch',
+      type: 'material',
+      severity: 'error',
+      message: `麻丝用量汇总不一致：各层合计${totalMaFromLayers.toFixed(2)}kg，材料汇总${archive.materialList.ma.toFixed(2)}kg`
+    })
+  }
+
+  if (Math.abs(totalBuFromLayers - archive.materialList.bu) > 0.01) {
+    issues.push({
+      id: 'material-bu-mismatch',
+      type: 'material',
+      severity: 'error',
+      message: `麻布用量汇总不一致：各层合计${totalBuFromLayers.toFixed(2)}㎡，材料汇总${archive.materialList.bu.toFixed(2)}㎡`
+    })
+  }
+
+  if (issues.length === 0) {
+    issues.push({
+      id: 'all-good',
+      type: 'general',
+      severity: 'info',
+      message: '档案数据完整，所有记录一致，复核通过'
+    })
+  }
+
+  return issues
+}
