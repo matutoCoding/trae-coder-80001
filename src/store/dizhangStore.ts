@@ -1,11 +1,12 @@
 import { create } from 'zustand'
 import type { 
   WoodenComponent, DizhangProcess, DizhangArchive, DizhangParadigm,
-  AshLayer, MabuLayer, RiskWarning
+  AshLayer, MabuLayer, RiskWarning, ProcessRecord
 } from '../types/dizhang'
 import { 
   generateAshLayers, calculateTotalMaterialList, 
-  calculateDryTime, checkAllRisks, getDefaultParadigms 
+  calculateDryTime, checkAllRisks, getDefaultParadigms,
+  createProcessRecord, createMabuProcessRecord
 } from '../utils/dizhangAlgorithm'
 
 interface DizhangState {
@@ -30,13 +31,18 @@ interface DizhangState {
   updateProcess: (id: string, process: Partial<DizhangProcess>) => void
   updateProcessLayer: (processId: string, layerId: string, updates: Partial<AshLayer>) => void
   updateMabuLayer: (processId: string, layerId: string, updates: Partial<MabuLayer>) => void
+  addProcessRecord: (processId: string, record: ProcessRecord) => void
+  addAshLayerRecord: (processId: string, layerId: string, operator?: string, notes?: string) => ProcessRecord | null
+  addMabuLayerRecord: (processId: string, layerId: string, operator?: string, notes?: string) => ProcessRecord | null
+  markMabuLayerDry: (processId: string, layerId: string) => void
   addProcessWarning: (processId: string, warning: RiskWarning) => void
-  completeProcess: (processId: string) => DizhangArchive | null
+  completeProcess: (processId: string, inspector?: string, notes?: string) => DizhangArchive | null
   addParadigm: (paradigm: DizhangParadigm) => void
   updateParadigm: (id: string, paradigm: Partial<DizhangParadigm>) => void
   deleteParadigm: (id: string) => void
   initDefaultParadigms: () => void
   recalculateProcess: (processId: string) => void
+  checkCanCompleteProcess: (processId: string) => { canComplete: boolean; missingItems: string[] }
 }
 
 export const useDizhangStore = create<DizhangState>((set, get) => ({
@@ -78,6 +84,14 @@ export const useDizhangStore = create<DizhangState>((set, get) => ({
     const component = state.components.find(c => c.id === componentId)
     if (!component) return null
 
+    const existingProcess = state.processes.find(
+      p => p.componentId === componentId && p.status !== 'completed'
+    )
+    if (existingProcess) {
+      set({ currentProcess: existingProcess })
+      return existingProcess
+    }
+
     const { ashLayers, mabuLayers } = generateAshLayers(
       component.targetGrade,
       component.area,
@@ -92,13 +106,14 @@ export const useDizhangStore = create<DizhangState>((set, get) => ({
       gradeName: component.targetGradeName,
       layers: ashLayers,
       mabuLayers,
+      records: [],
       temperature: 20,
       humidity: 55,
       startDate: new Date().toISOString(),
       totalAshUsage: {},
       totalMabuUsage: 0,
       riskWarnings: [],
-      status: 'draft'
+      status: 'in_progress'
     }
 
     const materialList = calculateTotalMaterialList(ashLayers, mabuLayers)
@@ -111,6 +126,9 @@ export const useDizhangStore = create<DizhangState>((set, get) => ({
     process.riskWarnings = checkAllRisks(ashLayers, process.temperature, process.humidity)
 
     set((state) => ({
+      components: state.components.map(c =>
+        c.id === componentId ? { ...c, status: 'in_progress' as const, updatedAt: new Date().toISOString() } : c
+      ),
       processes: [...state.processes, process],
       currentProcess: process
     }))
@@ -177,9 +195,18 @@ export const useDizhangStore = create<DizhangState>((set, get) => ({
       const processes = state.processes.map(p => {
         if (p.id !== processId) return p
         
-        const mabuLayers = p.mabuLayers.map(layer => 
-          layer.id === layerId ? { ...layer, ...updates } : layer
-        )
+        const mabuLayers = p.mabuLayers.map(layer => {
+          const updated = { ...layer, ...updates }
+          if (updates.appliedAt) {
+            const { adjustedDryTime } = calculateDryTime(
+              layer.dryTime,
+              p.temperature,
+              p.humidity
+            )
+            updated.actualDryTime = adjustedDryTime
+          }
+          return updated
+        })
         
         const materialList = calculateTotalMaterialList(p.layers, mabuLayers)
         
@@ -196,6 +223,80 @@ export const useDizhangStore = create<DizhangState>((set, get) => ({
       }
     }),
 
+  addProcessRecord: (processId, record) =>
+    set((state) => ({
+      processes: state.processes.map(p =>
+        p.id === processId
+          ? { ...p, records: [...p.records, record] }
+          : p
+      ),
+      currentProcess: state.currentProcess?.id === processId
+        ? { ...state.currentProcess, records: [...state.currentProcess.records, record] }
+        : state.currentProcess
+    })),
+
+  addAshLayerRecord: (processId, layerId, operator, notes) => {
+    const state = get()
+    const process = state.processes.find(p => p.id === processId)
+    if (!process) return null
+
+    const layer = process.layers.find(l => l.id === layerId)
+    if (!layer || !layer.appliedAt) return null
+
+    const record = createProcessRecord(
+      layer,
+      process.temperature,
+      process.humidity,
+      operator,
+      notes
+    )
+
+    state.addProcessRecord(processId, record)
+    return record
+  },
+
+  addMabuLayerRecord: (processId, layerId, operator, notes) => {
+    const state = get()
+    const process = state.processes.find(p => p.id === processId)
+    if (!process) return null
+
+    const layer = process.mabuLayers.find(l => l.id === layerId)
+    if (!layer || !layer.appliedAt) return null
+
+    const record = createMabuProcessRecord(
+      layer,
+      process.temperature,
+      process.humidity,
+      operator,
+      notes
+    )
+
+    state.addProcessRecord(processId, record)
+    return record
+  },
+
+  markMabuLayerDry: (processId, layerId) =>
+    set((state) => ({
+      processes: state.processes.map(p =>
+        p.id === processId
+          ? {
+              ...p,
+              mabuLayers: p.mabuLayers.map(l =>
+                l.id === layerId ? { ...l, isDry: true } : l
+              )
+            }
+          : p
+      ),
+      currentProcess: state.currentProcess?.id === processId
+        ? {
+            ...state.currentProcess,
+            mabuLayers: state.currentProcess.mabuLayers.map(l =>
+              l.id === layerId ? { ...l, isDry: true } : l
+            )
+          }
+        : state.currentProcess
+    })),
+
   addProcessWarning: (processId, warning) =>
     set((state) => ({
       processes: state.processes.map(p => 
@@ -205,35 +306,118 @@ export const useDizhangStore = create<DizhangState>((set, get) => ({
       )
     })),
 
-  completeProcess: (processId) => {
+  checkCanCompleteProcess: (processId) => {
+    const state = get()
+    const process = state.processes.find(p => p.id === processId)
+    if (!process) return { canComplete: false, missingItems: ['工序不存在'] }
+
+    const missingItems: string[] = []
+
+    const undoneAshLayers = process.layers.filter(l => !l.appliedAt)
+    if (undoneAshLayers.length > 0) {
+      missingItems.push(`未施工的灰层: ${undoneAshLayers.map(l => l.name).join('、')}`)
+    }
+
+    const undryAshLayers = process.layers.filter(l => l.appliedAt && !l.isDry)
+    if (undryAshLayers.length > 0) {
+      missingItems.push(`未确认干燥的灰层: ${undryAshLayers.map(l => l.name).join('、')}`)
+    }
+
+    const undoneMabuLayers = process.mabuLayers.filter(l => !l.appliedAt)
+    if (undoneMabuLayers.length > 0) {
+      missingItems.push(`未施工的麻/布层: ${undoneMabuLayers.map(l => l.name).join('、')}`)
+    }
+
+    const undryMabuLayers = process.mabuLayers.filter(l => l.appliedAt && !l.isDry)
+    if (undryMabuLayers.length > 0) {
+      missingItems.push(`未确认干燥的麻/布层: ${undryMabuLayers.map(l => l.name).join('、')}`)
+    }
+
+    return {
+      canComplete: missingItems.length === 0,
+      missingItems
+    }
+  },
+
+  completeProcess: (processId, inspector, notes) => {
     const state = get()
     const process = state.processes.find(p => p.id === processId)
     if (!process) return null
 
+    const { canComplete, missingItems } = state.checkCanCompleteProcess(processId)
+    if (!canComplete) {
+      return null
+    }
+
     const component = state.components.find(c => c.id === process.componentId)
+    if (!component) return null
+
     const materialList = calculateTotalMaterialList(process.layers, process.mabuLayers)
     
+    const allRecords = [...process.records].sort((a, b) => 
+      new Date(a.appliedAt).getTime() - new Date(b.appliedAt).getTime()
+    )
+
+    const avgTemp = allRecords.length > 0
+      ? Math.round(allRecords.reduce((sum, r) => sum + r.temperature, 0) / allRecords.length * 10) / 10
+      : process.temperature
+
+    const avgHumidity = allRecords.length > 0
+      ? Math.round(allRecords.reduce((sum, r) => sum + r.humidity, 0) / allRecords.length * 10) / 10
+      : process.humidity
+
+    const totalWarnings = process.riskWarnings.length
+
+    let qualityRating = 5
+    if (totalWarnings > 0) {
+      const criticalCount = process.riskWarnings.filter(w => w.level === 'critical').length
+      const highCount = process.riskWarnings.filter(w => w.level === 'high').length
+      if (criticalCount > 0) qualityRating = 2
+      else if (highCount > 0) qualityRating = 3
+      else qualityRating = 4
+    }
+
     const archive: DizhangArchive = {
       id: `archive-${Date.now()}`,
       processId: process.id,
+      component: { ...component },
       componentName: process.componentName,
-      componentCode: component?.code || '',
+      componentCode: component.code,
+      grade: process.grade,
       gradeName: process.gradeName,
-      records: [],
+      records: allRecords,
+      ashLayers: [...process.layers],
+      mabuLayers: [...process.mabuLayers],
       materialList,
-      totalArea: component?.area || 0,
+      totalArea: component.area,
       startDate: process.startDate,
       endDate: new Date().toISOString(),
-      qualityRating: process.riskWarnings.length === 0 ? 5 : 
-                     process.riskWarnings.filter(w => w.level === 'critical').length > 0 ? 2 :
-                     process.riskWarnings.filter(w => w.level === 'high').length > 0 ? 3 : 4
+      qualityRating,
+      avgTemperature: avgTemp,
+      avgHumidity,
+      totalWarnings,
+      inspector,
+      notes
     }
 
     set((state) => ({
+      components: state.components.map(c =>
+        c.id === process.componentId
+          ? { ...c, status: 'completed' as const, updatedAt: new Date().toISOString() }
+          : c
+      ),
       archives: [...state.archives, archive],
       processes: state.processes.map(p => 
-        p.id === processId ? { ...p, status: 'completed' as const, endDate: archive.endDate } : p
-      )
+        p.id === processId
+          ? { ...p, status: 'completed' as const, endDate: archive.endDate }
+          : p
+      ),
+      currentComponent: state.currentComponent?.id === process.componentId
+        ? { ...state.currentComponent, status: 'completed' as const }
+        : state.currentComponent,
+      currentProcess: state.currentProcess?.id === processId
+        ? { ...state.currentProcess, status: 'completed' as const }
+        : state.currentProcess
     }))
 
     return archive

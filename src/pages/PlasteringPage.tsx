@@ -39,13 +39,12 @@ import {
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import ReactECharts from 'echarts-for-react'
-import type { DizhangProcess, AshLayer, RiskWarning, ProcessRecord } from '../types/dizhang'
+import type { DizhangProcess, AshLayer, RiskWarning, ProcessRecord, MabuLayer } from '../types/dizhang'
 import { useDizhangStore } from '../store/dizhangStore'
 import { 
   calculateDryTime, 
   simulateCuringEffect, 
-  checkAllRisks,
-  createProcessRecord
+  checkAllRisks
 } from '../utils/dizhangAlgorithm'
 import { useNavigate } from 'react-router-dom'
 
@@ -76,6 +75,10 @@ const PlasteringPage = () => {
   const updateMabuLayer = useDizhangStore(state => state.updateMabuLayer)
   const completeProcess = useDizhangStore(state => state.completeProcess)
   const recalculateProcess = useDizhangStore(state => state.recalculateProcess)
+  const addAshLayerRecord = useDizhangStore(state => state.addAshLayerRecord)
+  const addMabuLayerRecord = useDizhangStore(state => state.addMabuLayerRecord)
+  const markMabuLayerDry = useDizhangStore(state => state.markMabuLayerDry)
+  const checkCanCompleteProcess = useDizhangStore(state => state.checkCanCompleteProcess)
 
   const [recordModalVisible, setRecordModalVisible] = useState(false)
   const [recordingLayer, setRecordingLayer] = useState<AshLayer | null>(null)
@@ -86,7 +89,17 @@ const PlasteringPage = () => {
   }>()
 
   const [mabuRecordModalVisible, setMabuRecordModalVisible] = useState(false)
-  const [recordingMabuIndex, setRecordingMabuIndex] = useState<number>(-1)
+  const [recordingMabuLayer, setRecordingMabuLayer] = useState<MabuLayer | null>(null)
+  const [mabuRecordForm] = Form.useForm<{
+    operator: string
+    notes: string
+  }>()
+
+  const [completeModalVisible, setCompleteModalVisible] = useState(false)
+  const [completeForm] = Form.useForm<{
+    inspector: string
+    notes: string
+  }>()
 
   const [temperature, setTemperature] = useState(currentProcess?.temperature || 20)
   const [humidity, setHumidity] = useState(currentProcess?.humidity || 55)
@@ -206,21 +219,12 @@ const PlasteringPage = () => {
         notes: values.notes
       })
 
-      const mabuIndex = currentProcess.mabuLayers.findIndex((_, i) => 
-        currentProcess.layers.findIndex(l => l.id === recordingLayer.id) > i
-      )
-      
-      if (mabuIndex >= 0 && mabuIndex < currentProcess.mabuLayers.length) {
-        const mabuLayer = currentProcess.mabuLayers[mabuIndex]
-        if (!mabuLayer.appliedAt) {
-          updateMabuLayer(currentProcess.id, mabuLayer.id, {
-            appliedAt: now
-          })
-        }
-      }
+      setTimeout(() => {
+        addAshLayerRecord(currentProcess.id, recordingLayer.id, values.operator, values.notes)
+        recalculateProcess(currentProcess.id)
+      }, 100)
 
-      recalculateProcess(currentProcess.id)
-      message.success(`${recordingLayer.name}施工记录已保存`)
+      message.success(`${recordingLayer.name}施工记录已保存，已进入工艺档案`)
       setRecordModalVisible(false)
     } catch {
       // 验证失败
@@ -236,49 +240,104 @@ const PlasteringPage = () => {
     message.success(`${layer.name}已标记为干燥`)
   }
 
+  const handleMabuRecord = (layer: MabuLayer) => {
+    setRecordingMabuLayer(layer)
+    mabuRecordForm.resetFields()
+    setMabuRecordModalVisible(true)
+  }
+
+  const handleMabuRecordSubmit = async () => {
+    if (!recordingMabuLayer || !currentProcess) return
+
+    try {
+      const values = await mabuRecordForm.validateFields()
+      const now = new Date().toISOString()
+      const { adjustedDryTime } = calculateDryTime(recordingMabuLayer.dryTime, temperature, humidity)
+
+      updateMabuLayer(currentProcess.id, recordingMabuLayer.id, {
+        appliedAt: now,
+        actualDryTime: adjustedDryTime,
+        operator: values.operator,
+        temperature,
+        humidity,
+        notes: values.notes
+      })
+
+      setTimeout(() => {
+        addMabuLayerRecord(currentProcess.id, recordingMabuLayer.id, values.operator, values.notes)
+      }, 100)
+
+      message.success(`${recordingMabuLayer.name}施工记录已保存，已进入工艺档案`)
+      setMabuRecordModalVisible(false)
+    } catch {
+      // 验证失败
+    }
+  }
+
+  const handleMarkMabuDry = (layer: MabuLayer) => {
+    if (!currentProcess) return
+    
+    markMabuLayerDry(currentProcess.id, layer.id)
+    message.success(`${layer.name}已标记为干燥`)
+  }
+
+  const getMabuLayerStatus = (layer: MabuLayer, index: number) => {
+    if (!layer.appliedAt) {
+      const prevAshLayer = currentProcess?.layers.find((_, i) => i === index)
+      if (index === 0 || prevAshLayer?.isDry) {
+        return { status: 'pending', text: '待施工', color: 'default', canStart: true }
+      }
+      return { status: 'blocked', text: '等待前层干燥', color: 'default', canStart: false }
+    }
+    if (!layer.isDry) {
+      return { status: 'drying', text: '干燥中', color: 'processing', canStart: false }
+    }
+    return { status: 'done', text: '已完成', color: 'success', canStart: false }
+  }
+
   const handleCompleteProcess = () => {
     if (!currentProcess) return
 
-    const undoneLayers = currentProcess.layers.filter(l => !l.appliedAt)
-    if (undoneLayers.length > 0) {
+    const { canComplete, missingItems } = checkCanCompleteProcess(currentProcess.id)
+    
+    if (!canComplete) {
       modal.error({
         title: '无法完成工序',
-        content: `还有 ${undoneLayers.length} 层未施工：${undoneLayers.map(l => l.name).join('、')}`
+        content: (
+          <div>
+            <p>还有以下内容未完成：</p>
+            <ul style={{ marginTop: 8 }}>
+              {missingItems.map((item, i) => (
+                <li key={i} style={{ color: '#ff4d4f', marginBottom: 4 }}>• {item}</li>
+              ))}
+            </ul>
+          </div>
+        )
       })
       return
     }
 
-    const undryLayers = currentProcess.layers.filter(l => l.appliedAt && !l.isDry)
-    if (undryLayers.length > 0) {
-      modal.confirm({
-        title: '确认完成工序？',
-        content: `还有 ${undryLayers.length} 层未确认干燥：${undryLayers.map(l => l.name).join('、')}，是否仍要完成？`,
-        okText: '确认完成',
-        cancelText: '取消',
-        onOk: () => {
-          const archive = completeProcess(currentProcess.id)
-          if (archive) {
-            message.success('工序已完成，工艺档案已生成')
-            navigate('/archive')
-          }
-        }
-      })
-      return
-    }
+    completeForm.resetFields()
+    setCompleteModalVisible(true)
+  }
 
-    modal.confirm({
-      title: '确认完成工序？',
-      content: '所有灰层已施工并确认干燥，完成后将生成工艺档案。',
-      okText: '确认完成',
-      cancelText: '取消',
-      onOk: () => {
-        const archive = completeProcess(currentProcess.id)
-        if (archive) {
-          message.success('工序已完成，工艺档案已生成')
-          navigate('/archive')
-        }
+  const handleCompleteSubmit = async () => {
+    if (!currentProcess) return
+
+    try {
+      const values = await completeForm.validateFields()
+      const archive = completeProcess(currentProcess.id, values.inspector, values.notes)
+      
+      if (archive) {
+        message.success('工序已完成，完整工艺档案已生成')
+        setCompleteModalVisible(false)
+        navigate('/archive')
+      } else {
+        message.error('生成档案失败，请检查所有工序是否完成')
       }
-    })
+    } catch {
+      // 验证失败
+    }
   }
 
   const getLayerStatus = (layer: AshLayer, index: number) => {
@@ -717,51 +776,135 @@ const PlasteringPage = () => {
                     <Space>
                       <span>🧵</span>
                       麻布/麻丝层施工记录
+                      <Tag color="blue">{currentProcess.mabuLayers.length} 道</Tag>
                     </Space>
                   }
                   className="layer-card"
                 >
                   <Row gutter={16}>
-                    {currentProcess.mabuLayers.map((layer, index) => (
-                      <Col span={12} key={layer.id}>
-                        <Card
-                          size="small"
-                          type={!layer.appliedAt ? 'inner' : undefined}
-                          style={{ 
-                            borderColor: layer.type === 'ma' ? '#d4a574' : '#c4956a'
-                          }}
-                          title={
-                            <Space>
-                              <Tag color={layer.type === 'ma' ? 'gold' : 'orange'}>
-                                {layer.type === 'ma' ? '麻丝' : '麻布'}
-                              </Tag>
-                              {layer.name}
-                            </Space>
-                          }
-                          extra={
-                            layer.appliedAt 
-                              ? <Tag color="success">已施工</Tag>
-                              : <Tag color="default">待施工</Tag>
-                          }
-                        >
-                          <Descriptions size="small" column={2}>
-                            <Descriptions.Item label="幅宽">{layer.width} cm</Descriptions.Item>
-                            <Descriptions.Item label="搭接">{layer.overlap} cm</Descriptions.Item>
-                            <Descriptions.Item label="用量">
-                              {layer.usage.toFixed(2)} {layer.type === 'ma' ? 'kg' : '㎡'}
-                            </Descriptions.Item>
-                            <Descriptions.Item label="施工面积">
-                              {layer.area.toFixed(2)} ㎡
-                            </Descriptions.Item>
-                          </Descriptions>
-                          {layer.appliedAt && (
-                            <div style={{ marginTop: 8, color: '#52c41a', fontSize: 12 }}>
-                              施工时间: {dayjs(layer.appliedAt).format('YYYY-MM-DD HH:mm')}
+                    {currentProcess.mabuLayers.map((layer, index) => {
+                      const status = getMabuLayerStatus(layer, index)
+                      const { adjustedDryTime } = calculateDryTime(layer.dryTime, temperature, humidity)
+                      const timeSinceApplied = layer.appliedAt 
+                        ? (Date.now() - new Date(layer.appliedAt).getTime()) / (1000 * 60 * 60)
+                        : 0
+                      const dryProgress = layer.appliedAt && !layer.isDry
+                        ? Math.min(100, Math.round((timeSinceApplied / (layer.actualDryTime || adjustedDryTime)) * 100))
+                        : 0
+                      const isDrying = layer.appliedAt && !layer.isDry
+                      const canStart = status.canStart
+
+                      return (
+                        <Col span={12} key={layer.id}>
+                          <Card
+                            size="small"
+                            type={!layer.appliedAt ? 'inner' : undefined}
+                            style={{ 
+                              borderColor: layer.type === 'ma' ? '#d4a574' : '#c4956a'
+                            }}
+                            title={
+                              <Space>
+                                <div 
+                                  className="layer-visual" 
+                                  style={{ 
+                                    width: 40, 
+                                    height: 20, 
+                                    backgroundColor: layer.type === 'ma' ? '#d4a574' : '#c4956a' 
+                                  }}
+                                />
+                                <Tag color={layer.type === 'ma' ? 'gold' : 'orange'}>
+                                  {layer.type === 'ma' ? '麻丝' : '麻布'}
+                                </Tag>
+                                {layer.name}
+                                <Tag color={status.color}>{status.text}</Tag>
+                              </Space>
+                            }
+                            extra={
+                              <Space>
+                                <span style={{ color: '#8b7355', fontSize: 12 }}>
+                                  标准干燥: {layer.dryTime}h | 预计: {adjustedDryTime.toFixed(1)}h
+                                </span>
+                              </Space>
+                            }
+                          >
+                            <Descriptions size="small" column={2}>
+                              <Descriptions.Item label="幅宽">{layer.width} cm</Descriptions.Item>
+                              <Descriptions.Item label="搭接">{layer.overlap} cm</Descriptions.Item>
+                              <Descriptions.Item label="用量">
+                                {layer.usage.toFixed(2)} {layer.type === 'ma' ? 'kg' : '㎡'}
+                              </Descriptions.Item>
+                              <Descriptions.Item label="施工面积">
+                                {layer.area.toFixed(2)} ㎡
+                              </Descriptions.Item>
+                              {layer.operator && (
+                                <Descriptions.Item label="施工人员">
+                                  {layer.operator}
+                                </Descriptions.Item>
+                              )}
+                              {layer.appliedAt && (
+                                <Descriptions.Item label="施工时间">
+                                  {dayjs(layer.appliedAt).format('MM-DD HH:mm')}
+                                </Descriptions.Item>
+                              )}
+                            </Descriptions>
+
+                            {isDrying && (
+                              <div style={{ marginTop: 12 }}>
+                                <Progress
+                                  percent={dryProgress}
+                                  size="small"
+                                  strokeColor={dryProgress >= 100 ? '#52c41a' : '#1890ff'}
+                                  format={(p) => `干燥进度 ${p}%`}
+                                />
+                              </div>
+                            )}
+
+                            <div style={{ marginTop: 12, textAlign: 'right' }}>
+                              {canStart && (
+                                <Button
+                                  type="primary"
+                                  icon={<PlayCircleOutlined />}
+                                  onClick={() => handleMabuRecord(layer)}
+                                >
+                                  开始施工
+                                </Button>
+                              )}
+                              {isDrying && dryProgress >= 100 && (
+                                <Button
+                                  type="primary"
+                                  icon={<CheckCircleOutlined />}
+                                  onClick={() => handleMarkMabuDry(layer)}
+                                >
+                                  确认干燥
+                                </Button>
+                              )}
+                              {isDrying && dryProgress < 100 && (
+                                <Tag color="processing">
+                                  还需 {(adjustedDryTime - timeSinceApplied).toFixed(1)} 小时
+                                </Tag>
+                              )}
+                              {status.status === 'blocked' && (
+                                <Tooltip title="等待前层干燥">
+                                  <Button disabled>等待中</Button>
+                                </Tooltip>
+                              )}
+                              {status.status === 'done' && (
+                                <Space direction="vertical" size={0} style={{ textAlign: 'left' }}>
+                                  <Tag color="success">
+                                    完成于 {dayjs(layer.appliedAt!).format('MM-DD HH:mm')}
+                                  </Tag>
+                                  {layer.temperature && layer.humidity && (
+                                    <span style={{ color: '#8b7355', fontSize: 12 }}>
+                                      施工环境: {layer.temperature}°C / {layer.humidity}%
+                                    </span>
+                                  )}
+                                </Space>
+                              )}
                             </div>
-                          )}
-                        </Card>
-                      </Col>
-                    ))}
+                          </Card>
+                        </Col>
+                      )
+                    })}
                   </Row>
                 </Card>
               </Col>
@@ -809,9 +952,28 @@ const PlasteringPage = () => {
               </Form.Item>
             </Col>
           </Row>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Alert
+                message={`当前环境温度 ${temperature}°C`}
+                type="info"
+                showIcon
+                icon={<ThunderboltOutlined />}
+              />
+            </Col>
+            <Col span={12}>
+              <Alert
+                message={`当前环境湿度 ${humidity}%`}
+                type="info"
+                showIcon
+                icon={<CloudOutlined />}
+              />
+            </Col>
+          </Row>
           <Form.Item
             name="notes"
             label="施工备注"
+            style={{ marginTop: 16 }}
           >
             <TextArea rows={3} placeholder="记录施工情况、天气情况、特殊处理等..." />
           </Form.Item>
@@ -820,6 +982,92 @@ const PlasteringPage = () => {
             type="warning"
             showIcon
           />
+        </Form>
+      </Modal>
+
+      <Modal
+        title={recordingMabuLayer ? `记录${recordingMabuLayer.name}施工` : '麻/布层施工记录'}
+        open={mabuRecordModalVisible}
+        onOk={handleMabuRecordSubmit}
+        onCancel={() => setMabuRecordModalVisible(false)}
+        width={550}
+        okText="保存记录"
+        cancelText="取消"
+      >
+        {recordingMabuLayer && (
+          <div style={{ marginBottom: 16 }}>
+            <Alert
+              message={`${recordingMabuLayer.type === 'ma' ? '麻丝' : '麻布'}用量 ${recordingMabuLayer.usage.toFixed(2)} ${recordingMabuLayer.type === 'ma' ? 'kg' : '㎡'}，搭接宽度 ${recordingMabuLayer.overlap}cm，预计干燥时间 ${calculateDryTime(recordingMabuLayer.dryTime, temperature, humidity).adjustedDryTime.toFixed(1)} 小时`}
+              type="info"
+              showIcon
+            />
+          </div>
+        )}
+        <Form form={mabuRecordForm} layout="vertical">
+          <Form.Item
+            name="operator"
+            label="施工人员"
+            rules={[{ required: true, message: '请输入施工人员姓名' }]}
+          >
+            <Input placeholder="请输入姓名" />
+          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Alert
+                message={`当前环境温度 ${temperature}°C`}
+                type="info"
+                showIcon
+                icon={<ThunderboltOutlined />}
+              />
+            </Col>
+            <Col span={12}>
+              <Alert
+                message={`当前环境湿度 ${humidity}%`}
+                type="info"
+                showIcon
+                icon={<CloudOutlined />}
+              />
+            </Col>
+          </Row>
+          <Form.Item
+            name="notes"
+            label="施工备注"
+            style={{ marginTop: 16 }}
+          >
+            <TextArea rows={3} placeholder="记录糊麻/糊布的情况，包括搭接是否整齐、是否有空鼓等..." />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="完成工序并生成工艺档案"
+        open={completeModalVisible}
+        onOk={handleCompleteSubmit}
+        onCancel={() => setCompleteModalVisible(false)}
+        width={550}
+        okText="确认完成并生成档案"
+        cancelText="取消"
+      >
+        <Alert
+          message="所有灰层和麻/布层均已施工并确认干燥，完成后将生成完整的工艺档案"
+          type="success"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+        <Form form={completeForm} layout="vertical">
+          <Form.Item
+            name="inspector"
+            label="验收人员"
+            rules={[{ required: true, message: '请输入验收人员姓名' }]}
+          >
+            <Input placeholder="请输入验收人员姓名" />
+          </Form.Item>
+          <Form.Item
+            name="notes"
+            label="验收备注"
+          >
+            <TextArea rows={3} placeholder="记录整体质量情况、验收意见等..." />
+          </Form.Item>
         </Form>
       </Modal>
     </div>

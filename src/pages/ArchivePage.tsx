@@ -268,48 +268,95 @@ const ArchivePage = () => {
         open={detailVisible}
         onCancel={() => setDetailVisible(false)}
         footer={null}
-        width={1000}
+        width={1100}
+        style={{ top: 20 }}
       >
         {currentArchive && (
-          <div>
-            <Descriptions title="基本信息" bordered size="small" column={3} style={{ marginBottom: 16 }}>
-              <Descriptions.Item label="构件编号">
-                <code style={{ background: '#f0e6d6', padding: '2px 6px', borderRadius: 4 }}>
-                  {currentArchive.componentCode}
-                </code>
-              </Descriptions.Item>
-              <Descriptions.Item label="构件名称">
-                {currentArchive.componentName}
-              </Descriptions.Item>
-              <Descriptions.Item label="地仗等级">
-                <Tag color="blue">{currentArchive.gradeName}</Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="施工面积">
-                {currentArchive.totalArea.toFixed(2)} ㎡
-              </Descriptions.Item>
-              <Descriptions.Item label="质量评级">
-                {getQualityStars(currentArchive.qualityRating)}
-              </Descriptions.Item>
-              <Descriptions.Item label="验收人员">
-                {currentArchive.inspector || '未记录'}
-              </Descriptions.Item>
-              <Descriptions.Item label="开始日期">
-                <Space><CalendarOutlined />{dayjs(currentArchive.startDate).format('YYYY-MM-DD HH:mm')}</Space>
-              </Descriptions.Item>
-              <Descriptions.Item label="完成日期">
-                <Space><CalendarOutlined />{dayjs(currentArchive.endDate).format('YYYY-MM-DD HH:mm')}</Space>
-              </Descriptions.Item>
-              <Descriptions.Item label="施工周期">
-                {dayjs(currentArchive.endDate).diff(dayjs(currentArchive.startDate), 'day')} 天
-              </Descriptions.Item>
-            </Descriptions>
+          <div style={{ maxHeight: '80vh', overflowY: 'auto', paddingRight: 8 }}>
+            <Card 
+              className="layer-card" 
+              style={{ marginBottom: 16 }}
+              title={
+                <Space>
+                  <span>🏛️</span>
+                  构件信息
+                </Space>
+              }
+            >
+              <Descriptions bordered size="small" column={3}>
+                <Descriptions.Item label="构件编号">
+                  <code style={{ background: '#f0e6d6', padding: '2px 6px', borderRadius: 4 }}>
+                    {currentArchive.componentCode}
+                  </code>
+                </Descriptions.Item>
+                <Descriptions.Item label="构件名称">
+                  {currentArchive.componentName}
+                </Descriptions.Item>
+                <Descriptions.Item label="地仗等级">
+                  <Tag color="blue">{currentArchive.gradeName}</Tag>
+                </Descriptions.Item>
+                {currentArchive.component && (
+                  <>
+                    <Descriptions.Item label="构件材质">
+                      {currentArchive.component.material}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="表面状况">
+                      {currentArchive.component.surfaceCondition}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="位置">
+                      {currentArchive.component.location || '未记录'}
+                    </Descriptions.Item>
+                  </>
+                )}
+                <Descriptions.Item label="施工面积">
+                  {currentArchive.totalArea.toFixed(2)} ㎡
+                </Descriptions.Item>
+                <Descriptions.Item label="质量评级">
+                  {getQualityStars(currentArchive.qualityRating)}
+                </Descriptions.Item>
+                <Descriptions.Item label="验收人员">
+                  {currentArchive.inspector || '未记录'}
+                </Descriptions.Item>
+                <Descriptions.Item label="开始日期">
+                  <Space><CalendarOutlined />{dayjs(currentArchive.startDate).format('YYYY-MM-DD HH:mm')}</Space>
+                </Descriptions.Item>
+                <Descriptions.Item label="完成日期">
+                  <Space><CalendarOutlined />{dayjs(currentArchive.endDate).format('YYYY-MM-DD HH:mm')}</Space>
+                </Descriptions.Item>
+                <Descriptions.Item label="施工周期">
+                  {dayjs(currentArchive.endDate).diff(dayjs(currentArchive.startDate), 'day')} 天
+                </Descriptions.Item>
+                {typeof currentArchive.avgTemperature === 'number' && (
+                  <Descriptions.Item label="平均温度">
+                    {currentArchive.avgTemperature.toFixed(1)}°C
+                  </Descriptions.Item>
+                )}
+                {typeof currentArchive.avgHumidity === 'number' && (
+                  <Descriptions.Item label="平均湿度">
+                    {currentArchive.avgHumidity.toFixed(1)}%
+                  </Descriptions.Item>
+                )}
+                {typeof currentArchive.totalWarnings === 'number' && (
+                  <Descriptions.Item label="风险预警">
+                    <Tag color={currentArchive.totalWarnings > 0 ? 'red' : 'green'}>
+                      {currentArchive.totalWarnings} 次
+                    </Tag>
+                  </Descriptions.Item>
+                )}
+              </Descriptions>
+            </Card>
 
-            <Divider orientation="left">材料用量</Divider>
+            <Divider orientation="left">
+              <Space>
+                <span>📦</span>
+                材料用量汇总
+              </Space>
+            </Divider>
             <Row gutter={16} style={{ marginBottom: 16 }}>
               <Col span={4}>
                 <Card size="small" className="stat-card">
                   <Statistic
-                    title="灰"
+                    title="砖灰"
                     value={currentArchive.materialList.ash}
                     suffix="kg"
                     precision={2}
@@ -320,7 +367,7 @@ const ArchivePage = () => {
               <Col span={4}>
                 <Card size="small" className="stat-card">
                   <Statistic
-                    title="灰（灰）"
+                    title="石灰"
                     value={currentArchive.materialList.lime}
                     suffix="kg"
                     precision={2}
@@ -364,7 +411,7 @@ const ArchivePage = () => {
               <Col span={4}>
                 <Card size="small" className="stat-card">
                   <Statistic
-                    title="灰层数量"
+                    title="总层数"
                     value={currentArchive.records.length}
                     suffix="层"
                     valueStyle={{ color: '#1890ff' }}
@@ -373,17 +420,149 @@ const ArchivePage = () => {
               </Col>
             </Row>
 
-            <Divider orientation="left">施工记录</Divider>
+            {currentArchive.ashLayers && currentArchive.ashLayers.length > 0 && (
+              <>
+                <Divider orientation="left">
+                  <Space>
+                    <span>🧱</span>
+                    灰层详情 ({currentArchive.ashLayers.length} 层)
+                  </Space>
+                </Divider>
+                <Row gutter={16} style={{ marginBottom: 16 }}>
+                  {currentArchive.ashLayers.map((layer) => (
+                    <Col span={8} key={layer.id}>
+                      <Card
+                        size="small"
+                        className="layer-card"
+                        style={{ marginBottom: 8 }}
+                        title={
+                          <Space>
+                            <div 
+                              style={{ 
+                                width: 30, 
+                                height: 15, 
+                                backgroundColor: '#d4a574',
+                                borderRadius: 2
+                              }}
+                            />
+                            <span>{layer.name}</span>
+                          </Space>
+                        }
+                      >
+                        <Descriptions size="small" column={2}>
+                          <Descriptions.Item label="设计厚度">
+                            {layer.designThickness} mm
+                          </Descriptions.Item>
+                          <Descriptions.Item label="实际厚度">
+                            {layer.thickness} mm
+                          </Descriptions.Item>
+                          <Descriptions.Item label="干燥时间">
+                            {layer.actualDryTime?.toFixed(1) || layer.dryTime} h
+                          </Descriptions.Item>
+                          <Descriptions.Item label="配比偏差">
+                            <Tag color={layer.deviation && Math.abs(layer.deviation) > 10 ? 'red' : 
+                                       layer.deviation && Math.abs(layer.deviation) > 5 ? 'orange' : 'green'}>
+                              {layer.deviation ? `${layer.deviation > 0 ? '+' : ''}${layer.deviation.toFixed(1)}%` : '0%'}
+                            </Tag>
+                          </Descriptions.Item>
+                        </Descriptions>
+                      </Card>
+                    </Col>
+                  ))}
+                </Row>
+              </>
+            )}
+
+            {currentArchive.mabuLayers && currentArchive.mabuLayers.length > 0 && (
+              <>
+                <Divider orientation="left">
+                  <Space>
+                    <span>🧵</span>
+                    麻/布层详情 ({currentArchive.mabuLayers.length} 道)
+                  </Space>
+                </Divider>
+                <Row gutter={16} style={{ marginBottom: 16 }}>
+                  {currentArchive.mabuLayers.map((layer) => (
+                    <Col span={12} key={layer.id}>
+                      <Card
+                        size="small"
+                        className="layer-card"
+                        style={{ 
+                          marginBottom: 8,
+                          borderColor: layer.type === 'ma' ? '#d4a574' : '#c4956a'
+                        }}
+                        title={
+                          <Space>
+                            <Tag color={layer.type === 'ma' ? 'gold' : 'orange'}>
+                              {layer.type === 'ma' ? '麻丝' : '麻布'}
+                            </Tag>
+                            {layer.name}
+                            {layer.operator && (
+                              <span style={{ color: '#8b7355', fontSize: 12 }}>
+                                施工: {layer.operator}
+                              </span>
+                            )}
+                          </Space>
+                        }
+                      >
+                        <Descriptions size="small" column={3}>
+                          <Descriptions.Item label="幅宽">
+                            {layer.width} cm
+                          </Descriptions.Item>
+                          <Descriptions.Item label="搭接">
+                            {layer.overlap} cm
+                          </Descriptions.Item>
+                          <Descriptions.Item label="用量">
+                            {layer.usage.toFixed(2)} {layer.type === 'ma' ? 'kg' : '㎡'}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="施工面积">
+                            {layer.area.toFixed(2)} ㎡
+                          </Descriptions.Item>
+                          <Descriptions.Item label="施工环境">
+                            {layer.temperature}°C / {layer.humidity}%
+                          </Descriptions.Item>
+                          <Descriptions.Item label="干燥时间">
+                            {layer.actualDryTime?.toFixed(1) || layer.dryTime} h
+                          </Descriptions.Item>
+                        </Descriptions>
+                      </Card>
+                    </Col>
+                  ))}
+                </Row>
+              </>
+            )}
+
+            <Divider orientation="left">
+              <Space>
+                <span>📋</span>
+                完整施工时间线
+                <Tag color="blue">{currentArchive.records.length} 条记录</Tag>
+              </Space>
+            </Divider>
             {currentArchive.records.length > 0 ? (
               <Timeline
                 mode="left"
                 style={{ marginTop: 16 }}
               >
-                {currentArchive.records.map((record, index) => (
+                {[...currentArchive.records]
+                  .sort((a, b) => new Date(a.appliedAt).getTime() - new Date(b.appliedAt).getTime())
+                  .map((record) => (
                   <Timeline.Item
                     key={record.id}
                     color={record.inspectionResult === 'pass' ? 'green' : 
                            record.inspectionResult === 'warning' ? 'orange' : 'red'}
+                    dot={record.layerType === 'mabu' ? (
+                      <div style={{ 
+                        width: 12, 
+                        height: 12, 
+                        borderRadius: '50%',
+                        backgroundColor: record.inspectionResult === 'pass' ? '#52c41a' : 
+                                        record.inspectionResult === 'warning' ? '#faad14' : '#ff4d4f',
+                        border: '2px solid #fff',
+                        boxShadow: '0 0 0 1px ' + (record.inspectionResult === 'pass' ? '#52c41a' : 
+                                  record.inspectionResult === 'warning' ? '#faad14' : '#ff4d4f')
+                      }} />
+                    ) : undefined}
                   >
                     <Card
                       size="small"
@@ -391,6 +570,11 @@ const ArchivePage = () => {
                       style={{ marginBottom: 8 }}
                       title={
                         <Space>
+                          {record.layerType === 'mabu' && (
+                            <Tag color={record.layerName.includes('麻') ? 'gold' : 'orange'}>
+                              {record.layerName.includes('麻') ? '麻丝' : '麻布'}
+                            </Tag>
+                          )}
                           <span>{record.layerName}</span>
                           {getResultTag(record.inspectionResult)}
                         </Space>
@@ -409,21 +593,64 @@ const ArchivePage = () => {
                       }
                     >
                       <Descriptions size="small" column={3}>
-                        <Descriptions.Item label="施工厚度">
-                          {record.thickness} mm
-                        </Descriptions.Item>
-                        <Descriptions.Item label="环境温度">
-                          {record.temperature}°C
-                        </Descriptions.Item>
-                        <Descriptions.Item label="相对湿度">
-                          {record.humidity}%
-                        </Descriptions.Item>
-                        <Descriptions.Item label="配比 (灰:灰:油:水)" span={3}>
-                          {record.ratio.ash}:{record.ratio.lime}:{record.ratio.tungOil}:{record.ratio.water}
-                        </Descriptions.Item>
+                        {record.layerType === 'ash' && (
+                          <>
+                            <Descriptions.Item label="施工厚度">
+                              {record.thickness} mm
+                            </Descriptions.Item>
+                            <Descriptions.Item label="环境温度">
+                              {record.temperature}°C
+                            </Descriptions.Item>
+                            <Descriptions.Item label="相对湿度">
+                              {record.humidity}%
+                            </Descriptions.Item>
+                            <Descriptions.Item label="配比 (砖灰:石灰:桐油:水)" span={3}>
+                              <code style={{ background: '#f0e6d6', padding: '2px 6px', borderRadius: 4 }}>
+                                {record.ratio.ash}:{record.ratio.lime}:{record.ratio.tungOil}:{record.ratio.water}
+                              </code>
+                            </Descriptions.Item>
+                            {record.deviation !== undefined && (
+                              <Descriptions.Item label="配比偏差" span={3}>
+                                <Tag color={Math.abs(record.deviation) > 10 ? 'red' : 
+                                           Math.abs(record.deviation) > 5 ? 'orange' : 'green'}>
+                                  {record.deviation > 0 ? '+' : ''}{record.deviation.toFixed(1)}%
+                                  {Math.abs(record.deviation) > 10 ? ' (超标)' : Math.abs(record.deviation) > 5 ? ' (偏高)' : ' (合格)'}
+                                </Tag>
+                              </Descriptions.Item>
+                            )}
+                          </>
+                        )}
+                        {record.layerType === 'mabu' && (
+                          <>
+                            <Descriptions.Item label="类型">
+                              {record.layerName.includes('麻') ? '麻丝' : '麻布'}
+                            </Descriptions.Item>
+                            <Descriptions.Item label="环境温度">
+                              {record.temperature}°C
+                            </Descriptions.Item>
+                            <Descriptions.Item label="相对湿度">
+                              {record.humidity}%
+                            </Descriptions.Item>
+                            <Descriptions.Item label="施工面积" span={3}>
+                              {record.mabuArea?.toFixed(2)} ㎡
+                            </Descriptions.Item>
+                            {record.mabuUsage !== undefined && (
+                              <Descriptions.Item label="实际用量" span={3}>
+                                {record.mabuUsage.toFixed(2)} {record.layerName.includes('麻') ? 'kg' : '㎡'}
+                              </Descriptions.Item>
+                            )}
+                          </>
+                        )}
                         {record.notes && (
-                          <Descriptions.Item label="备注" span={3}>
-                            {record.notes}
+                          <Descriptions.Item label="施工备注" span={3}>
+                            <div style={{ 
+                              padding: '8px 12px', 
+                              background: '#fffbe6', 
+                              borderRadius: 4,
+                              borderLeft: '3px solid #faad14'
+                            }}>
+                              {record.notes}
+                            </div>
                           </Descriptions.Item>
                         )}
                       </Descriptions>
@@ -439,8 +666,18 @@ const ArchivePage = () => {
 
             {currentArchive.notes && (
               <>
-                <Divider orientation="left">验收备注</Divider>
-                <div style={{ padding: 16, background: '#f0e6d6', borderRadius: 8 }}>
+                <Divider orientation="left">
+                  <Space>
+                    <span>📝</span>
+                    验收备注
+                  </Space>
+                </Divider>
+                <div style={{ 
+                  padding: 16, 
+                  background: '#f0e6d6', 
+                  borderRadius: 8,
+                  borderLeft: '4px solid #8B4513'
+                }}>
                   {currentArchive.notes}
                 </div>
               </>

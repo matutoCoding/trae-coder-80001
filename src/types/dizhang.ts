@@ -85,6 +85,13 @@ export type MabuLayer = {
   area: number
   usage: number
   appliedAt?: string
+  operator?: string
+  temperature?: number
+  humidity?: number
+  notes?: string
+  isDry: boolean
+  dryTime: number
+  actualDryTime?: number
 }
 
 export type WoodenComponent = {
@@ -114,6 +121,7 @@ export type DizhangProcess = {
   gradeName: string
   layers: AshLayer[]
   mabuLayers: MabuLayer[]
+  records: ProcessRecord[]
   temperature: number
   humidity: number
   environmentalNotes?: string
@@ -146,21 +154,30 @@ export type MaterialList = {
 export type DizhangArchive = {
   id: string
   processId: string
+  component: WoodenComponent
   componentName: string
   componentCode: string
+  grade: DizhangGrade
   gradeName: string
   records: ProcessRecord[]
+  ashLayers: AshLayer[]
+  mabuLayers: MabuLayer[]
   materialList: MaterialList
   totalArea: number
   startDate: string
   endDate: string
   qualityRating: number
+  avgTemperature: number
+  avgHumidity: number
+  totalWarnings: number
   inspector?: string
   notes?: string
 }
 
 export type ProcessRecord = {
   id: string
+  layerId: string
+  layerType: 'ash' | 'mabu'
   layerName: string
   appliedAt: string
   operator?: string

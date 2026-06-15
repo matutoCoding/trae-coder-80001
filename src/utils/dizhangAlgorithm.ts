@@ -110,7 +110,9 @@ export function generateAshLayers(
         width: layerConfig.mabuType === 'ma' ? 10 : 80,
         overlap: layerConfig.mabuType === 'ma' ? 3 : 10,
         area: adjustedArea,
-        usage: calculateMabuUsage(adjustedArea, layerConfig.mabuType!, layerConfig.mabuType === 'ma' ? 10 : 80, layerConfig.mabuType === 'ma' ? 3 : 10)
+        usage: calculateMabuUsage(adjustedArea, layerConfig.mabuType!, layerConfig.mabuType === 'ma' ? 10 : 80, layerConfig.mabuType === 'ma' ? 3 : 10),
+        isDry: false,
+        dryTime: layerConfig.dryTime
       }
       mabuLayers.push(mabuLayer)
     } else {
@@ -476,6 +478,8 @@ export function createProcessRecord(
 
   return {
     id: `record-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    layerId: layer.id,
+    layerType: 'ash',
     layerName: layer.name,
     appliedAt: layer.appliedAt || new Date().toISOString(),
     operator,
@@ -484,6 +488,33 @@ export function createProcessRecord(
     temperature,
     humidity,
     inspectionResult,
+    notes
+  }
+}
+
+export function createMabuProcessRecord(
+  layer: MabuLayer,
+  temperature: number,
+  humidity: number,
+  operator?: string,
+  notes?: string
+): ProcessRecord {
+  return {
+    id: `record-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    layerId: layer.id,
+    layerType: 'mabu',
+    layerName: layer.name,
+    appliedAt: layer.appliedAt || new Date().toISOString(),
+    operator,
+    thickness: 0,
+    ratio: {
+      幅宽: layer.width,
+      搭接量: layer.overlap,
+      用量: Math.round(layer.usage * 100) / 100
+    },
+    temperature,
+    humidity,
+    inspectionResult: 'pass',
     notes
   }
 }
