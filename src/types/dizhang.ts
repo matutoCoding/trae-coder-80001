@@ -46,6 +46,7 @@ export type AshLayer = {
   id: string
   type: HuicengType
   name: string
+  designThickness: number
   thickness: number
   targetRatio: {
     ash: number
@@ -63,6 +64,7 @@ export type AshLayer = {
   }
   area: number
   appliedAt?: string
+  operator?: string
   dryTime: number
   actualDryTime?: number
   isDry: boolean
@@ -182,11 +184,23 @@ export type ProcessRecord = {
   appliedAt: string
   operator?: string
   thickness: number
+  designThickness?: number
   ratio: Record<string, number>
   temperature: number
   humidity: number
   inspectionResult: 'pass' | 'fail' | 'warning'
   notes?: string
+  deviation?: {
+    ash: number
+    lime: number
+    tungOil: number
+    water: number
+  }
+  mabuArea?: number
+  mabuUsage?: number
+  mabuOverlap?: number
+  mabuWidth?: number
+  mabuType?: 'ma' | 'bu'
 }
 
 export type DizhangParadigm = {

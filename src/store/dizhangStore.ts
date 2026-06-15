@@ -243,8 +243,25 @@ export const useDizhangStore = create<DizhangState>((set, get) => ({
     const layer = process.layers.find(l => l.id === layerId)
     if (!layer || !layer.appliedAt) return null
 
+    const updatedLayer = { ...layer, operator, notes }
+    const processes = state.processes.map(p =>
+      p.id === processId
+        ? {
+            ...p,
+            layers: p.layers.map(l =>
+              l.id === layerId ? updatedLayer : l
+            )
+          }
+        : p
+    )
+
+    set((state) => ({
+      processes,
+      currentProcess: processes.find(p => p.id === processId) || state.currentProcess
+    }))
+
     const record = createProcessRecord(
-      layer,
+      updatedLayer,
       process.temperature,
       process.humidity,
       operator,

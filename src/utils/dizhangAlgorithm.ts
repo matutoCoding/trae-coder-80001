@@ -124,11 +124,13 @@ export function generateAshLayers(
         thicknessMultiplier = 1.2
       }
 
+      const designThickness = Math.round(layerConfig.thickness * thicknessMultiplier * 10) / 10
       const ashLayer: AshLayer = {
         id,
         type: layerConfig.type,
         name: layerConfig.name,
-        thickness: Math.round(layerConfig.thickness * thicknessMultiplier * 10) / 10,
+        designThickness,
+        thickness: designThickness,
         targetRatio: {
           ash: layerConfig.ratio.ash,
           lime: layerConfig.ratio.lime,
@@ -482,13 +484,15 @@ export function createProcessRecord(
     layerType: 'ash',
     layerName: layer.name,
     appliedAt: layer.appliedAt || new Date().toISOString(),
-    operator,
+    operator: operator || layer.operator,
+    designThickness: layer.designThickness,
     thickness: layer.thickness,
     ratio: { ...ratioWithoutOther },
     temperature,
     humidity,
     inspectionResult,
-    notes
+    notes: notes || layer.notes,
+    deviation: layer.deviation
   }
 }
 
@@ -505,16 +509,21 @@ export function createMabuProcessRecord(
     layerType: 'mabu',
     layerName: layer.name,
     appliedAt: layer.appliedAt || new Date().toISOString(),
-    operator,
+    operator: operator || layer.operator,
     thickness: 0,
     ratio: {
       幅宽: layer.width,
       搭接量: layer.overlap,
       用量: Math.round(layer.usage * 100) / 100
     },
-    temperature,
-    humidity,
+    temperature: layer.temperature || temperature,
+    humidity: layer.humidity || humidity,
     inspectionResult: 'pass',
-    notes
+    notes: notes || layer.notes,
+    mabuArea: layer.area,
+    mabuUsage: layer.usage,
+    mabuOverlap: layer.overlap,
+    mabuWidth: layer.width,
+    mabuType: layer.type
   }
 }

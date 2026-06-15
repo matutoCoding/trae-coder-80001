@@ -270,81 +270,148 @@ const ArchivePage = () => {
         footer={null}
         width={1100}
         style={{ top: 20 }}
+        destroyOnClose={false}
       >
         {currentArchive && (
-          <div style={{ maxHeight: '80vh', overflowY: 'auto', paddingRight: 8 }}>
+          <div style={{ maxHeight: '78vh', overflowY: 'auto', paddingRight: 8 }}>
             <Card 
               className="layer-card" 
               style={{ marginBottom: 16 }}
               title={
                 <Space>
                   <span>🏛️</span>
-                  构件信息
+                  构件基本信息
                 </Space>
               }
             >
               <Descriptions bordered size="small" column={3}>
                 <Descriptions.Item label="构件编号">
                   <code style={{ background: '#f0e6d6', padding: '2px 6px', borderRadius: 4 }}>
-                    {currentArchive.componentCode}
+                    {currentArchive.componentCode || '未设置'}
                   </code>
                 </Descriptions.Item>
                 <Descriptions.Item label="构件名称">
-                  {currentArchive.componentName}
+                  {currentArchive.componentName || '未命名'}
                 </Descriptions.Item>
                 <Descriptions.Item label="地仗等级">
-                  <Tag color="blue">{currentArchive.gradeName}</Tag>
+                  <Tag color="blue">{currentArchive.gradeName || '未设置'}</Tag>
                 </Descriptions.Item>
-                {currentArchive.component && (
-                  <>
-                    <Descriptions.Item label="构件材质">
-                      {currentArchive.component.material}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="表面状况">
-                      {currentArchive.component.surfaceCondition}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="位置">
-                      {currentArchive.component.location || '未记录'}
-                    </Descriptions.Item>
-                  </>
-                )}
+                <Descriptions.Item label="构件材质">
+                  {currentArchive.component?.materialName || currentArchive.component?.material || '未记录'}
+                </Descriptions.Item>
+                <Descriptions.Item label="所在位置">
+                  {currentArchive.component?.position || '未记录'}
+                </Descriptions.Item>
                 <Descriptions.Item label="施工面积">
-                  {currentArchive.totalArea.toFixed(2)} ㎡
+                  {(currentArchive.totalArea || 0).toFixed(2)} ㎡
                 </Descriptions.Item>
                 <Descriptions.Item label="质量评级">
-                  {getQualityStars(currentArchive.qualityRating)}
+                  {getQualityStars(currentArchive.qualityRating || 0)}
                 </Descriptions.Item>
                 <Descriptions.Item label="验收人员">
                   {currentArchive.inspector || '未记录'}
                 </Descriptions.Item>
-                <Descriptions.Item label="开始日期">
-                  <Space><CalendarOutlined />{dayjs(currentArchive.startDate).format('YYYY-MM-DD HH:mm')}</Space>
-                </Descriptions.Item>
-                <Descriptions.Item label="完成日期">
-                  <Space><CalendarOutlined />{dayjs(currentArchive.endDate).format('YYYY-MM-DD HH:mm')}</Space>
-                </Descriptions.Item>
                 <Descriptions.Item label="施工周期">
                   {dayjs(currentArchive.endDate).diff(dayjs(currentArchive.startDate), 'day')} 天
                 </Descriptions.Item>
-                {typeof currentArchive.avgTemperature === 'number' && (
-                  <Descriptions.Item label="平均温度">
-                    {currentArchive.avgTemperature.toFixed(1)}°C
-                  </Descriptions.Item>
-                )}
-                {typeof currentArchive.avgHumidity === 'number' && (
-                  <Descriptions.Item label="平均湿度">
-                    {currentArchive.avgHumidity.toFixed(1)}%
-                  </Descriptions.Item>
-                )}
-                {typeof currentArchive.totalWarnings === 'number' && (
-                  <Descriptions.Item label="风险预警">
-                    <Tag color={currentArchive.totalWarnings > 0 ? 'red' : 'green'}>
-                      {currentArchive.totalWarnings} 次
-                    </Tag>
-                  </Descriptions.Item>
-                )}
+                <Descriptions.Item label="开始时间">
+                  <Space><CalendarOutlined />{dayjs(currentArchive.startDate).format('YYYY-MM-DD HH:mm')}</Space>
+                </Descriptions.Item>
+                <Descriptions.Item label="完成时间">
+                  <Space><CalendarOutlined />{dayjs(currentArchive.endDate).format('YYYY-MM-DD HH:mm')}</Space>
+                </Descriptions.Item>
+                <Descriptions.Item label="风险预警">
+                  <Tag color={(currentArchive.totalWarnings || 0) > 0 ? 'red' : 'green'}>
+                    {currentArchive.totalWarnings || 0} 次
+                  </Tag>
+                </Descriptions.Item>
               </Descriptions>
             </Card>
+
+            {currentArchive.component?.surfaceCondition && (
+              <Card 
+                className="layer-card" 
+                style={{ marginBottom: 16 }}
+                title={
+                  <Space>
+                    <span>🔍</span>
+                    表面状况详情
+                  </Space>
+                }
+                size="small"
+              >
+                <Row gutter={16}>
+                  <Col span={6}>
+                    <Card size="small" className="stat-card">
+                      <Statistic
+                        title="裂缝情况"
+                        value={currentArchive.component.surfaceCondition.hasCracks ? '有裂缝' : '无裂缝'}
+                        valueStyle={{ 
+                          color: currentArchive.component.surfaceCondition.hasCracks ? '#ff4d4f' : '#52c41a',
+                          fontSize: 16
+                        }}
+                        suffix=""
+                      />
+                      {currentArchive.component.surfaceCondition.hasCracks && (
+                        <div style={{ color: '#8b7355', fontSize: 12, marginTop: 4 }}>
+                          裂缝宽度约 {currentArchive.component.surfaceCondition.crackWidth || 0} mm
+                        </div>
+                      )}
+                    </Card>
+                  </Col>
+                  <Col span={6}>
+                    <Card size="small" className="stat-card">
+                      <Statistic
+                        title="腐朽情况"
+                        value={currentArchive.component.surfaceCondition.hasRot ? '有腐朽' : '无腐朽'}
+                        valueStyle={{ 
+                          color: currentArchive.component.surfaceCondition.hasRot ? '#ff4d4f' : '#52c41a',
+                          fontSize: 16
+                        }}
+                      />
+                      {currentArchive.component.surfaceCondition.hasRot && (
+                        <div style={{ color: '#8b7355', fontSize: 12, marginTop: 4 }}>
+                          腐朽面积约 {currentArchive.component.surfaceCondition.rotArea || 0}%
+                        </div>
+                      )}
+                    </Card>
+                  </Col>
+                  <Col span={6}>
+                    <Card size="small" className="stat-card">
+                      <Statistic
+                        title="松动情况"
+                        value={currentArchive.component.surfaceCondition.hasLoose ? '有松动' : '无松动'}
+                        valueStyle={{ 
+                          color: currentArchive.component.surfaceCondition.hasLoose ? '#faad14' : '#52c41a',
+                          fontSize: 16
+                        }}
+                      />
+                      {currentArchive.component.surfaceCondition.hasLoose && (
+                        <div style={{ color: '#8b7355', fontSize: 12, marginTop: 4 }}>
+                          松动面积约 {currentArchive.component.surfaceCondition.looseArea || 0}%
+                        </div>
+                      )}
+                    </Card>
+                  </Col>
+                  <Col span={6}>
+                    <Card size="small" className="stat-card">
+                      <Statistic
+                        title="含水率"
+                        value={currentArchive.component.surfaceCondition.moistureContent || 0}
+                        suffix="%"
+                        valueStyle={{ 
+                          color: (currentArchive.component.surfaceCondition.moistureContent || 0) > 15 ? '#ff4d4f' : '#52c41a',
+                          fontSize: 16
+                        }}
+                      />
+                      <div style={{ color: '#8b7355', fontSize: 12, marginTop: 4 }}>
+                        平整度 {currentArchive.component.surfaceCondition.smoothness || 0}%
+                      </div>
+                    </Card>
+                  </Col>
+                </Row>
+              </Card>
+            )}
 
             <Divider orientation="left">
               <Space>
@@ -429,46 +496,141 @@ const ArchivePage = () => {
                   </Space>
                 </Divider>
                 <Row gutter={16} style={{ marginBottom: 16 }}>
-                  {currentArchive.ashLayers.map((layer) => (
-                    <Col span={8} key={layer.id}>
-                      <Card
-                        size="small"
-                        className="layer-card"
-                        style={{ marginBottom: 8 }}
-                        title={
-                          <Space>
-                            <div 
-                              style={{ 
-                                width: 30, 
-                                height: 15, 
-                                backgroundColor: '#d4a574',
-                                borderRadius: 2
-                              }}
-                            />
-                            <span>{layer.name}</span>
-                          </Space>
-                        }
-                      >
-                        <Descriptions size="small" column={2}>
-                          <Descriptions.Item label="设计厚度">
-                            {layer.designThickness} mm
-                          </Descriptions.Item>
-                          <Descriptions.Item label="实际厚度">
-                            {layer.thickness} mm
-                          </Descriptions.Item>
-                          <Descriptions.Item label="干燥时间">
-                            {layer.actualDryTime?.toFixed(1) || layer.dryTime} h
-                          </Descriptions.Item>
-                          <Descriptions.Item label="配比偏差">
-                            <Tag color={layer.deviation && Math.abs(layer.deviation) > 10 ? 'red' : 
-                                       layer.deviation && Math.abs(layer.deviation) > 5 ? 'orange' : 'green'}>
-                              {layer.deviation ? `${layer.deviation > 0 ? '+' : ''}${layer.deviation.toFixed(1)}%` : '0%'}
-                            </Tag>
-                          </Descriptions.Item>
-                        </Descriptions>
-                      </Card>
-                    </Col>
-                  ))}
+                  {currentArchive.ashLayers.map((layer) => {
+                    const deviation = layer.deviation
+                    const hasDeviation = layer.hasDeviation
+                    
+                    return (
+                      <Col span={8} key={layer.id}>
+                        <Card
+                          size="small"
+                          className="layer-card"
+                          style={{ marginBottom: 8 }}
+                          title={
+                            <Space>
+                              <div 
+                                style={{ 
+                                  width: 30, 
+                                  height: 15, 
+                                  backgroundColor: '#d4a574',
+                                  borderRadius: 2
+                                }}
+                              />
+                              <span>{layer.name}</span>
+                              {layer.operator && (
+                                <Tag color="blue" style={{ fontSize: 11 }}>
+                                  施工: {layer.operator}
+                                </Tag>
+                              )}
+                            </Space>
+                          }
+                        >
+                          <Descriptions size="small" column={2}>
+                            <Descriptions.Item label="设计厚度">
+                              {layer.designThickness || layer.thickness} mm
+                            </Descriptions.Item>
+                            <Descriptions.Item label="实际厚度">
+                              {layer.thickness} mm
+                            </Descriptions.Item>
+                            <Descriptions.Item label="标准干燥">
+                              {layer.dryTime} h
+                            </Descriptions.Item>
+                            <Descriptions.Item label="实际干燥">
+                              {layer.actualDryTime?.toFixed(1) || layer.dryTime} h
+                            </Descriptions.Item>
+                          </Descriptions>
+                          
+                          <Divider style={{ margin: '8px 0' }} />
+                          
+                          <div style={{ fontSize: 12, color: '#8b7355', marginBottom: 4 }}>
+                            配比偏差分析
+                          </div>
+                          <Row gutter={8}>
+                            <Col span={6}>
+                              <div style={{ 
+                                textAlign: 'center', 
+                                padding: '4px 0',
+                                background: '#f9f5f0',
+                                borderRadius: 4
+                              }}>
+                                <div style={{ fontSize: 11, color: '#8b7355' }}>砖灰</div>
+                                <div style={{ 
+                                  fontSize: 13, 
+                                  fontWeight: 'bold',
+                                  color: deviation && Math.abs(deviation.ash) > 10 ? '#ff4d4f' :
+                                         deviation && Math.abs(deviation.ash) > 5 ? '#faad14' : '#52c41a'
+                                }}>
+                                  {deviation?.ash !== undefined 
+                                    ? `${deviation.ash > 0 ? '+' : ''}${deviation.ash.toFixed(1)}%`
+                                    : '0%'}
+                                </div>
+                              </div>
+                            </Col>
+                            <Col span={6}>
+                              <div style={{ 
+                                textAlign: 'center', 
+                                padding: '4px 0',
+                                background: '#f9f5f0',
+                                borderRadius: 4
+                              }}>
+                                <div style={{ fontSize: 11, color: '#8b7355' }}>石灰</div>
+                                <div style={{ 
+                                  fontSize: 13, 
+                                  fontWeight: 'bold',
+                                  color: deviation && Math.abs(deviation.lime) > 10 ? '#ff4d4f' :
+                                         deviation && Math.abs(deviation.lime) > 5 ? '#faad14' : '#52c41a'
+                                }}>
+                                  {deviation?.lime !== undefined 
+                                    ? `${deviation.lime > 0 ? '+' : ''}${deviation.lime.toFixed(1)}%`
+                                    : '0%'}
+                                </div>
+                              </div>
+                            </Col>
+                            <Col span={6}>
+                              <div style={{ 
+                                textAlign: 'center', 
+                                padding: '4px 0',
+                                background: '#f9f5f0',
+                                borderRadius: 4
+                              }}>
+                                <div style={{ fontSize: 11, color: '#8b7355' }}>桐油</div>
+                                <div style={{ 
+                                  fontSize: 13, 
+                                  fontWeight: 'bold',
+                                  color: deviation && Math.abs(deviation.tungOil) > 10 ? '#ff4d4f' :
+                                         deviation && Math.abs(deviation.tungOil) > 5 ? '#faad14' : '#52c41a'
+                                }}>
+                                  {deviation?.tungOil !== undefined 
+                                    ? `${deviation.tungOil > 0 ? '+' : ''}${deviation.tungOil.toFixed(1)}%`
+                                    : '0%'}
+                                </div>
+                              </div>
+                            </Col>
+                            <Col span={6}>
+                              <div style={{ 
+                                textAlign: 'center', 
+                                padding: '4px 0',
+                                background: '#f9f5f0',
+                                borderRadius: 4
+                              }}>
+                                <div style={{ fontSize: 11, color: '#8b7355' }}>水</div>
+                                <div style={{ 
+                                  fontSize: 13, 
+                                  fontWeight: 'bold',
+                                  color: deviation && Math.abs(deviation.water) > 10 ? '#ff4d4f' :
+                                         deviation && Math.abs(deviation.water) > 5 ? '#faad14' : '#52c41a'
+                                }}>
+                                  {deviation?.water !== undefined 
+                                    ? `${deviation.water > 0 ? '+' : ''}${deviation.water.toFixed(1)}%`
+                                    : '0%'}
+                                </div>
+                              </div>
+                            </Col>
+                          </Row>
+                        </Card>
+                      </Col>
+                    )
+                  })}
                 </Row>
               </>
             )}
@@ -571,21 +733,21 @@ const ArchivePage = () => {
                       title={
                         <Space>
                           {record.layerType === 'mabu' && (
-                            <Tag color={record.layerName.includes('麻') ? 'gold' : 'orange'}>
-                              {record.layerName.includes('麻') ? '麻丝' : '麻布'}
+                            <Tag color={record.mabuType === 'ma' ? 'gold' : 'orange'}>
+                              {record.mabuType === 'ma' ? '麻丝' : '麻布'}
                             </Tag>
                           )}
-                          <span>{record.layerName}</span>
+                          <span>{record.layerName || '未命名'}</span>
                           {getResultTag(record.inspectionResult)}
                         </Space>
                       }
                       extra={
                         <Space size={16}>
-                          <span style={{ color: '#8b7355' }}>
+                          <span style={{ color: '#8b7355', fontSize: 12 }}>
                             <CalendarOutlined /> {dayjs(record.appliedAt).format('YYYY-MM-DD HH:mm')}
                           </span>
                           {record.operator && (
-                            <span style={{ color: '#8b7355' }}>
+                            <span style={{ color: '#8b7355', fontSize: 12 }}>
                               <UserOutlined /> {record.operator}
                             </span>
                           )}
@@ -595,50 +757,90 @@ const ArchivePage = () => {
                       <Descriptions size="small" column={3}>
                         {record.layerType === 'ash' && (
                           <>
-                            <Descriptions.Item label="施工厚度">
-                              {record.thickness} mm
+                            <Descriptions.Item label="设计厚度">
+                              {record.designThickness || record.thickness} mm
                             </Descriptions.Item>
-                            <Descriptions.Item label="环境温度">
-                              {record.temperature}°C
+                            <Descriptions.Item label="实际厚度">
+                              {record.thickness || 0} mm
+                            </Descriptions.Item>
+                            <Descriptions.Item label="偏差">
+                              {record.designThickness 
+                                ? `${((record.thickness - record.designThickness) / record.designThickness * 100).toFixed(1)}%`
+                                : '0%'}
+                            </Descriptions.Item>
+                            <Descriptions.Item label="施工温度">
+                              {record.temperature || 0}°C
                             </Descriptions.Item>
                             <Descriptions.Item label="相对湿度">
-                              {record.humidity}%
+                              {record.humidity || 0}%
+                            </Descriptions.Item>
+                            <Descriptions.Item label="质量结果">
+                              {getResultTag(record.inspectionResult)}
                             </Descriptions.Item>
                             <Descriptions.Item label="配比 (砖灰:石灰:桐油:水)" span={3}>
-                              <code style={{ background: '#f0e6d6', padding: '2px 6px', borderRadius: 4 }}>
-                                {record.ratio.ash}:{record.ratio.lime}:{record.ratio.tungOil}:{record.ratio.water}
+                              <code style={{ background: '#f0e6d6', padding: '2px 8px', borderRadius: 4, fontSize: 13 }}>
+                                {record.ratio?.ash ?? 0}:{record.ratio?.lime ?? 0}:{record.ratio?.tungOil ?? 0}:{record.ratio?.water ?? 0}
                               </code>
                             </Descriptions.Item>
-                            {record.deviation !== undefined && (
-                              <Descriptions.Item label="配比偏差" span={3}>
-                                <Tag color={Math.abs(record.deviation) > 10 ? 'red' : 
-                                           Math.abs(record.deviation) > 5 ? 'orange' : 'green'}>
-                                  {record.deviation > 0 ? '+' : ''}{record.deviation.toFixed(1)}%
-                                  {Math.abs(record.deviation) > 10 ? ' (超标)' : Math.abs(record.deviation) > 5 ? ' (偏高)' : ' (合格)'}
-                                </Tag>
+                            
+                            {record.deviation && (
+                              <Descriptions.Item label="分项偏差" span={3}>
+                                <Row gutter={8}>
+                                  <Col span={6}>
+                                    <Tag color={Math.abs(record.deviation.ash) > 10 ? 'red' : 
+                                               Math.abs(record.deviation.ash) > 5 ? 'orange' : 'green'}
+                                         style={{ width: '100%', textAlign: 'center' }}>
+                                      砖灰 {record.deviation.ash > 0 ? '+' : ''}{record.deviation.ash.toFixed(1)}%
+                                    </Tag>
+                                  </Col>
+                                  <Col span={6}>
+                                    <Tag color={Math.abs(record.deviation.lime) > 10 ? 'red' : 
+                                               Math.abs(record.deviation.lime) > 5 ? 'orange' : 'green'}
+                                         style={{ width: '100%', textAlign: 'center' }}>
+                                      石灰 {record.deviation.lime > 0 ? '+' : ''}{record.deviation.lime.toFixed(1)}%
+                                    </Tag>
+                                  </Col>
+                                  <Col span={6}>
+                                    <Tag color={Math.abs(record.deviation.tungOil) > 10 ? 'red' : 
+                                               Math.abs(record.deviation.tungOil) > 5 ? 'orange' : 'green'}
+                                         style={{ width: '100%', textAlign: 'center' }}>
+                                      桐油 {record.deviation.tungOil > 0 ? '+' : ''}{record.deviation.tungOil.toFixed(1)}%
+                                    </Tag>
+                                  </Col>
+                                  <Col span={6}>
+                                    <Tag color={Math.abs(record.deviation.water) > 10 ? 'red' : 
+                                               Math.abs(record.deviation.water) > 5 ? 'orange' : 'green'}
+                                         style={{ width: '100%', textAlign: 'center' }}>
+                                      水 {record.deviation.water > 0 ? '+' : ''}{record.deviation.water.toFixed(1)}%
+                                    </Tag>
+                                  </Col>
+                                </Row>
                               </Descriptions.Item>
                             )}
                           </>
                         )}
                         {record.layerType === 'mabu' && (
                           <>
-                            <Descriptions.Item label="类型">
-                              {record.layerName.includes('麻') ? '麻丝' : '麻布'}
+                            <Descriptions.Item label="材料类型">
+                              <Tag color={record.mabuType === 'ma' ? 'gold' : 'orange'}>
+                                {record.mabuType === 'ma' ? '麻丝' : '麻布'}
+                              </Tag>
                             </Descriptions.Item>
-                            <Descriptions.Item label="环境温度">
-                              {record.temperature}°C
+                            <Descriptions.Item label="幅宽">
+                              {record.mabuWidth || 0} cm
                             </Descriptions.Item>
-                            <Descriptions.Item label="相对湿度">
-                              {record.humidity}%
+                            <Descriptions.Item label="搭接宽度">
+                              {record.mabuOverlap || 0} cm
                             </Descriptions.Item>
-                            <Descriptions.Item label="施工面积" span={3}>
-                              {record.mabuArea?.toFixed(2)} ㎡
+                            <Descriptions.Item label="施工面积">
+                              {record.mabuArea?.toFixed(2) || '0.00'} ㎡
                             </Descriptions.Item>
-                            {record.mabuUsage !== undefined && (
-                              <Descriptions.Item label="实际用量" span={3}>
-                                {record.mabuUsage.toFixed(2)} {record.layerName.includes('麻') ? 'kg' : '㎡'}
-                              </Descriptions.Item>
-                            )}
+                            <Descriptions.Item label="实际用量">
+                              {record.mabuUsage?.toFixed(2) || '0.00'} {record.mabuType === 'ma' ? 'kg' : '㎡'}
+                            </Descriptions.Item>
+                            <Descriptions.Item label="施工环境">
+                              {record.temperature || 0}°C / {record.humidity || 0}%
+                            </Descriptions.Item>
                           </>
                         )}
                         {record.notes && (
@@ -647,7 +849,9 @@ const ArchivePage = () => {
                               padding: '8px 12px', 
                               background: '#fffbe6', 
                               borderRadius: 4,
-                              borderLeft: '3px solid #faad14'
+                              borderLeft: '3px solid #faad14',
+                              fontSize: 12,
+                              lineHeight: 1.6
                             }}>
                               {record.notes}
                             </div>
